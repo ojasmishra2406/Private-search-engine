@@ -1,0 +1,105 @@
+[
+  {
+    "query": "python string formatting",
+    "relevant_docs": [
+      "60e59cd4f858dad82e62e0f3d5f55b2c30df610e1bfe2abc8a67b07cc79f9cb8"
+    ]
+  },
+  {
+    "query": "dictionary comprehension",
+    "relevant_docs": [
+      "6e0c70bc58d8cd36c3bb1708e810cf10007807c4814de8a7d88522f7da0a388e",
+      "1b10f1d55ad8ed14fee1aa27249205aca7cc72c70c8eb04e04ef663d45623e1c"
+    ]
+  },
+  {
+    "query": "metaclass programming",
+    "relevant_docs": [
+      "c657c97731a0fbe4b190a953860a69a7d5452138a76f9c4d01e42675e2d6e317"
+    ]
+  },
+  {
+    "query": "list sorting",
+    "relevant_docs": [
+      "1b10f1d55ad8ed14fee1aa27249205aca7cc72c70c8eb04e04ef663d45623e1c"
+    ]
+  },
+  {
+    "query": "multithreading",
+    "relevant_docs": [
+      "14f1e4b5473a6eeac951fbae3cd4d451d156e48d6b5eaaaa003c84e9e41bd8d7",
+      "f2ebfcd6fe78c49b344e78c1ae06eb5bdb6febfee581fb5a38c5ac62c6089e45"
+    ]
+  },
+  {
+    "query": "asyncio event loop",
+    "relevant_docs": [
+      "f0b927a57cd17b2b36dd54aa6dac26aa422b5fc8cf4ab14c8a73435414afa4a6",
+      "c058ec1092c81582780faf769efecbedf1ce496806988caab02c9d8f35184f47",
+      "38e1999e5e29c168c96cb7a76d350470f8a878c896ed1033eea7559fbbab2fa4",
+      "3faa3470a9a2c1a5970bb4a778769905a5594b081f1233339b7ea15c6d73098f"
+    ]
+  },
+  {
+    "query": "unit testing",
+    "relevant_docs": [
+      "2384b53cbca811041078c1007b8d50805c30aec6a450e3ce42859aed23d270f2",
+      "367525d5c2bb964dcae70a7b2bddea45981c388b43b8cffbec78f1eef49cd4a0",
+      "dc1d36b8d6885828c023ebe6903667e5fd1456c7c60ce812eb93c55f9a24d526",
+      "96697c5014cd13060fd80cbd3340c71f90a98f9296dddfd12651796720d77d94"
+    ]
+  },
+  {
+    "query": "garbage collection",
+    "relevant_docs": [
+      "8139079198649d1a87c3e85d4ad627a36c0714a0f9e22bb7332862c954befdc3"
+    ]
+  },
+  {
+    "query": "file input output",
+    "relevant_docs": [
+      "60e59cd4f858dad82e62e0f3d5f55b2c30df610e1bfe2abc8a67b07cc79f9cb8"
+    ]
+  },
+  {
+    "query": "command line arguments",
+    "relevant_docs": [
+      "665f8fc1b08c6e989a16c5322db358c63d87db30963371743594b455b71437a6",
+      "e5d59a9a648db68d4478434816f5a14578d336e3c2f769cbcef3b8e11b2b98d6"
+    ]
+  },
+  {
+    "query": "http requests",
+    "relevant_docs": [
+      "e2ad3f34c5587ad667f969b62286d70619a4fca21d3d1cf537db070dda0147a4",
+      "d8b936b65d31f850b023868b8915a74bfb07911e650fd666cf1b063a0cc6da60",
+      "44085c69dfc2102af27f4caee639d6406a165399c6945cf078687d1e3254add8"
+    ]
+  },
+  {
+    "query": "xml processing",
+    "relevant_docs": [
+      "656c2f73e99168ae07c0d0f715e2d2cf5b1331a1637a68ebc42df8b31ff48586"
+    ]
+  },
+  {
+    "query": "logging tutorial",
+    "relevant_docs": [
+      "c001cfdaf9167c07e187b89f50322bbf4f52d95d3f732e9e47cb571106fb1f5e"
+    ]
+  },
+  {
+    "query": "memory profiling",
+    "relevant_docs": [
+      "9d7083a33e1f1b81fc1b0e51032cbc39368221150b84a953d04914d1e58a63a9"
+    ]
+  },
+  {
+    "query": "c extension module",
+    "relevant_docs": [
+      "c1632efd2d54dda9e9445055930ebcf38898e8bf4876472ca59006ec544dfa95",
+      "2fa5eda38337a0c2ddd6527d0b27efb663b55b964a47bbf41c33fb6e03195cf4",
+      "253762534afdbb288c31d6779445e38f8252fecb8c1e84efa3e9052acfcedf58"
+    ]
+  }
+]

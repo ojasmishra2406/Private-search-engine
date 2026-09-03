@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - DB_PATH=sqlite:////app/data/search.db
+      - LEXICAL_INDEX_PATH=/app/data/index.pkl
+      - DENSE_INDEX_PATH=/app/data/dense.index
+      - DENSE_MAP_PATH=/app/data/dense_map.pkl
+      - CORS_ALLOW_ORIGINS=["http://localhost:5173", "http://localhost:3000"]
+      - HF_HOME=/app/data/hf_cache
+    volumes:
+      - search_data:/app/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  search_data:

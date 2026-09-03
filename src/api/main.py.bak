@@ -1,0 +1,610 @@
+import os
+import sys
+import pickle
+import time
+from contextlib import asynccontextmanager
+from typing import List, Optional, Dict
+import urllib.parse
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+# Add root directory to python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.core.search import LexicalSearch
+from src.core.tokenizer import Tokenizer
+from src.storage.database import Database
+from src.storage.models import DBDocument
+from src.api.snippets import SnippetGenerator
+
+# Global state
+app_state = {}
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load index on startup — exactly once.
+    print("Loading InvertedIndex...")
+    try:
+        with open('index.pkl', 'rb') as f:
+            index = pickle.load(f)
+        tokenizer = Tokenizer()
+        app_state["search_engine"] = LexicalSearch(index, tokenizer)
+        app_state["snippet_generator"] = SnippetGenerator(tokenizer)
+        print(f"Index loaded successfully with {index.total_docs} documents.")
+    except Exception as e:
+        print(f"Warning: Failed to load index.pkl: {e}")
+        app_state["search_engine"] = None
+
+    # Setup database (applies Phase 3 migrations on first run)
+    db = Database()
+    db.init_db()
+    app_state["db"] = db
+
+    # Dense Retrieval Initialization
+    print("Loading Dense Index...")
+    try:
+        from src.dense.embeddings import EmbeddingModel
+        from src.dense.vector_index import VectorIndex
+        from src.dense.retriever import DenseRetriever
+        
+        # Load embedding model and vector index
+        emb_model = EmbeddingModel()
+        vector_index = VectorIndex()
+        
+        app_state["dense_retriever"] = DenseRetriever(emb_model, vector_index)
+        print(f"Dense Index loaded successfully with {vector_index.total_docs} vectors.")
+    except Exception as e:
+        print(f"Warning: Failed to load dense retrieval subsystem: {e}")
+        app_state["dense_retriever"] = None
+        
+    # Hybrid Retrieval Initialization
+    from src.hybrid.retriever import HybridRetriever
+    lexical = app_state.get("search_engine")
+    dense = app_state.get("dense_retriever")
+    if lexical and dense:
+        app_state["hybrid_retriever"] = HybridRetriever(lexical, dense)
+    else:
+        # We can still initialize it, it will degrade gracefully
+        app_state["hybrid_retriever"] = HybridRetriever(lexical, dense)
+
+
+    # Cross-Encoder Reranker Initialization
+    print("Loading Cross-Encoder...")
+    try:
+        from src.reranker.cross_encoder import CrossEncoderModel
+        from src.reranker.reranker import CrossEncoderReranker
+        # Load the model explicitly on CPU to ensure compatibility (default behavior)
+        ce_model = CrossEncoderModel()
+        reranker = CrossEncoderReranker(ce_model)
+        app_state["reranker"] = reranker
+        print("Cross-Encoder loaded successfully.")
+    except Exception as e:
+        print(f"Warning: Failed to load Cross-Encoder: {e}")
+        app_state["reranker"] = None
+
+    yield
+
+    print("Shutting down...")
+
+
+app = FastAPI(title="Private Search Engine API", lifespan=lifespan)
+
+# CORS for local React dev
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+class SearchResultModel(BaseModel):
+    doc_id:  str
+    title:   str
+    url:     str
+    score:   float
+    snippet: str
+    matches: List[str]   # query tokens that appear in the snippet (for highlighting)
+    rerank_score: Optional[float] = None
+    lexical_score: Optional[float] = None
+    dense_score: Optional[float] = None
+    hybrid_score: Optional[float] = None
+
+
+class SearchResponseModel(BaseModel):
+    query:         str
+    total_results: int
+    offset:        int
+    results:       List[SearchResultModel]
+    timing:        Optional[Dict[str, float]] = None
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/health")
+def health_check():
+    lexical = app_state.get("search_engine")
+    dense = app_state.get("dense_retriever")
+    reranker = app_state.get("reranker")
+    db = app_state.get("db")
+    
+    db_reachable = False
+    index_version = None
+    if db:
+        try:
+            session = db.get_session()
+            from src.storage.models import IndexVersion
+            max_v = session.query(IndexVersion).order_by(IndexVersion.version.desc()).first()
+            if max_v:
+                index_version = max_v.version
+            db_reachable = True
+        except Exception:
+            pass
+        finally:
+            if 'session' in locals():
+                session.close()
+                
+    return {
+        "status": "ok" if (lexical and db_reachable) else "degraded",
+        "database_reachable": db_reachable,
+        "lexical_index_loaded": lexical is not None,
+        "dense_index_loaded": dense is not None,
+        "reranker_loaded": reranker is not None,
+        "index_generation": index_version
+    }
+
+
+@app.get("/search", response_model=SearchResponseModel)
+def search(
+    q:      str           = Query(...,  description="Search query"),
+    top_k:  int           = Query(10,   description="Number of results to return"),
+    offset: int           = Query(0,    description="Zero-based result offset for pagination"),
+    domain: Optional[str] = Query(None, description="Filter results to URLs containing this domain string"),
+):
+    """
+    BM25 search endpoint.
+
+    Pagination:
+        top_k  – page size  (capped at 100)
+        offset – skip first N matching results
+
+    Filtering:
+        domain – optional substring match against the result URL
+                 (e.g. 'docs.python.org')
+    """
+    # --- Input validation ---
+    if top_k <= 0:
+        raise HTTPException(status_code=400, detail="top_k must be strictly positive")
+    if top_k > 100:
+        top_k = 100
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="offset must be non-negative")
+
+    q = q.strip()
+    if len(q) > 500:
+        raise HTTPException(status_code=400, detail="Query too long (max 500 characters)")
+    if not q:
+        return {"query": q, "total_results": 0, "offset": offset, "results": []}
+
+    engine = app_state.get("search_engine")
+    if not engine:
+        raise HTTPException(status_code=503, detail="Search engine not initialized")
+
+    snippet_gen = app_state.get("snippet_generator")
+    db          = app_state.get("db")
+    session     = db.get_session()
+
+    try:
+        t0 = time.perf_counter()
+        # Over-fetch a fixed, large number of candidates so that total_results
+        # is consistent regardless of the requested offset.  500 comfortably
+        # exceeds the current 555-doc corpus while remaining fast.
+        raw_results = engine.search(q, top_k=500)
+        t_lexical = time.perf_counter()
+
+        hydrated: List[SearchResultModel] = []
+        t_hydration_start = time.perf_counter()
+
+        for res in raw_results:
+            # Hydrate — skip tombstoned documents (is_deleted=True)
+            db_doc = session.query(DBDocument).filter_by(
+                id=res.doc_id, is_deleted=False
+            ).first()
+
+            if db_doc is None:
+                continue  # tombstoned or orphaned index entry
+
+            title   = db_doc.title   or "Untitled Document"
+            url     = db_doc.url     or "unknown-url"
+            content = db_doc.content or ""
+
+            # --- Domain filter (Phase 6 requirement) ---
+            if domain and domain.lower() not in url.lower():
+                continue
+
+            snippet_data = snippet_gen.generate(content, q)
+
+            hydrated.append(SearchResultModel(
+                doc_id=res.doc_id,
+                title=title,
+                url=url,
+                score=res.score,
+                snippet=snippet_data["text"],
+                matches=snippet_data["matches"],
+                lexical_score=res.score
+            ))
+
+        # Apply offset pagination
+        total = len(hydrated)
+        page  = hydrated[offset: offset + top_k]
+        
+        t_total = time.perf_counter()
+        timing = {
+            "lexical": t_lexical - t0,
+            "hydration": t_total - t_hydration_start,
+            "total": t_total - t0
+        }
+        
+        from src.api.logger import logger
+        logger.log_search(
+            endpoint="/search",
+            query=q,
+            timing=timing,
+            total_results=total,
+            returned_results=len(page),
+            mode="lexical"
+        )
+
+        return {
+            "query":         q,
+            "total_results": total,
+            "offset":        offset,
+            "results":       page,
+            "timing":        timing
+        }
+    finally:
+        session.close()
+
+@app.get("/dense-search", response_model=SearchResponseModel)
+def dense_search(
+    q:      str           = Query(...,  description="Search query"),
+    top_k:  int           = Query(10,   description="Number of results to return"),
+    offset: int           = Query(0,    description="Zero-based result offset for pagination"),
+    domain: Optional[str] = Query(None, description="Filter results to URLs containing this domain string"),
+):
+    """Phase 8 Dense retrieval search endpoint."""
+    if top_k <= 0:
+        raise HTTPException(status_code=400, detail="top_k must be strictly positive")
+    if top_k > 100:
+        top_k = 100
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="offset must be non-negative")
+
+    q = q.strip()
+    if len(q) > 500:
+        raise HTTPException(status_code=400, detail="Query too long (max 500 characters)")
+    if not q:
+        return {"query": q, "total_results": 0, "offset": offset, "results": []}
+
+    dense_retriever = app_state.get("dense_retriever")
+    if not dense_retriever:
+        raise HTTPException(status_code=503, detail="Dense search engine not initialized")
+
+    snippet_gen = app_state.get("snippet_generator")
+    db          = app_state.get("db")
+    session     = db.get_session()
+
+    try:
+        t0 = time.perf_counter()
+        raw_results = dense_retriever.search(q, top_k=500)
+        t_dense = time.perf_counter()
+        
+        hydrated: List[SearchResultModel] = []
+        t_hydration_start = time.perf_counter()
+
+        for doc_id, score in raw_results:
+            db_doc = session.query(DBDocument).filter_by(
+                id=doc_id, is_deleted=False
+            ).first()
+
+            if db_doc is None:
+                continue
+
+            title   = db_doc.title   or "Untitled Document"
+            url     = db_doc.url     or "unknown-url"
+            content = db_doc.content or ""
+
+            if domain and domain.lower() not in url.lower():
+                continue
+
+            snippet_data = snippet_gen.generate(content, q)
+
+            hydrated.append(SearchResultModel(
+                doc_id=doc_id,
+                title=title,
+                url=url,
+                score=score,
+                snippet=snippet_data["text"],
+                matches=snippet_data["matches"],
+                dense_score=score
+            ))
+
+        total = len(hydrated)
+        page  = hydrated[offset: offset + top_k]
+        
+        t_total = time.perf_counter()
+        timing = {
+            "dense": t_dense - t0,
+            "hydration": t_total - t_hydration_start,
+            "total": t_total - t0
+        }
+        
+        from src.api.logger import logger
+        logger.log_search(
+            endpoint="/dense-search",
+            query=q,
+            timing=timing,
+            total_results=total,
+            returned_results=len(page),
+            mode="dense"
+        )
+
+        return {
+            "query":         q,
+            "total_results": total,
+            "offset":        offset,
+            "results":       page,
+            "timing":        timing
+        }
+    finally:
+        session.close()
+
+@app.get("/hybrid-search", response_model=SearchResponseModel)
+def hybrid_search(
+    q:      str           = Query(...,  description="Search query"),
+    top_k:  int           = Query(10,   description="Number of results to return"),
+    offset: int           = Query(0,    description="Zero-based result offset for pagination"),
+    domain: Optional[str] = Query(None, description="Filter results to URLs containing this domain string"),
+    method: str           = Query('weighted', description="Fusion method: 'rrf' or 'weighted'"),
+    alpha:  float         = Query(0.40,  description="Weight for BM25 in weighted fusion (0.0 to 1.0)"),
+):
+    """Phase 9 Hybrid retrieval search endpoint."""
+    if top_k <= 0:
+        raise HTTPException(status_code=400, detail="top_k must be strictly positive")
+    if top_k > 100:
+        top_k = 100
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="offset must be non-negative")
+
+    q = q.strip()
+    if len(q) > 500:
+        raise HTTPException(status_code=400, detail="Query too long (max 500 characters)")
+    if not q:
+        return {"query": q, "total_results": 0, "offset": offset, "results": []}
+
+    hybrid_retriever = app_state.get("hybrid_retriever")
+    if not hybrid_retriever:
+        raise HTTPException(status_code=503, detail="Hybrid search engine not initialized")
+
+    snippet_gen = app_state.get("snippet_generator")
+    db          = app_state.get("db")
+    session     = db.get_session()
+
+    try:
+        t0 = time.perf_counter()
+        raw_results, diagnostics, timing = hybrid_retriever.search(
+            q, top_k=500, candidate_pool_size=500, method=method, alpha=alpha, return_diagnostics=True
+        )
+        t_hydration_start = time.perf_counter()
+        
+        hydrated: List[SearchResultModel] = []
+
+        for doc_id, score in raw_results:
+            db_doc = session.query(DBDocument).filter_by(
+                id=doc_id, is_deleted=False
+            ).first()
+
+            if db_doc is None:
+                continue
+
+            title   = db_doc.title   or "Untitled Document"
+            url     = db_doc.url     or "unknown-url"
+            content = db_doc.content or ""
+
+            if domain and domain.lower() not in url.lower():
+                continue
+
+            snippet_data = snippet_gen.generate(content, q)
+
+            diag = diagnostics.get(doc_id, {})
+            hydrated.append(SearchResultModel(
+                doc_id=doc_id,
+                title=title,
+                url=url,
+                score=score,
+                snippet=snippet_data["text"],
+                matches=snippet_data["matches"],
+                lexical_score=diag.get('lexical_score'),
+                dense_score=diag.get('dense_score'),
+                hybrid_score=score
+            ))
+
+        total = len(hydrated)
+        page  = hydrated[offset: offset + top_k]
+        
+        t_total = time.perf_counter()
+        timing['hydration'] = t_total - t_hydration_start
+        timing['total'] = t_total - t0
+        
+        from src.api.logger import logger
+        logger.log_search(
+            endpoint="/hybrid-search",
+            query=q,
+            timing=timing,
+            total_results=total,
+            returned_results=len(page),
+            mode=f"hybrid-{method}"
+        )
+
+        return {
+            "query":         q,
+            "total_results": total,
+            "offset":        offset,
+            "results":       page,
+            "timing":        timing
+        }
+    finally:
+        session.close()
+
+
+
+@app.get("/reranked-search", response_model=SearchResponseModel)
+def reranked_search(
+    q:      str           = Query(...,  description="Search query"),
+    top_k:  int           = Query(10,   description="Number of results to return"),
+    offset: int           = Query(0,    description="Zero-based result offset for pagination"),
+    domain: Optional[str] = Query(None, description="Filter results to URLs containing this domain string"),
+    candidate_pool_size: int = Query(50, description="Number of candidates to fetch from hybrid before reranking"),
+    method: str           = Query('weighted', description="Fusion method for hybrid retrieval"),
+    alpha:  float         = Query(0.40,  description="Weight for BM25 in weighted fusion"),
+):
+    """Phase 10 Reranked search endpoint."""
+    if top_k <= 0:
+        raise HTTPException(status_code=400, detail="top_k must be strictly positive")
+    if top_k > 100:
+        top_k = 100
+    if offset < 0:
+        raise HTTPException(status_code=400, detail="offset must be non-negative")
+    if candidate_pool_size > 500:
+        candidate_pool_size = 500
+
+    q = q.strip()
+    if len(q) > 500:
+        raise HTTPException(status_code=400, detail="Query too long (max 500 characters)")
+    if not q:
+        return {"query": q, "total_results": 0, "offset": offset, "results": []}
+
+    hybrid_retriever = app_state.get("hybrid_retriever")
+    if not hybrid_retriever:
+        raise HTTPException(status_code=503, detail="Hybrid search engine not initialized")
+
+    snippet_gen = app_state.get("snippet_generator")
+    db          = app_state.get("db")
+    session     = db.get_session()
+    reranker = app_state.get("reranker")
+    
+    try:
+        t0 = time.perf_counter()
+        # 1. Retrieve candidates
+        raw_results, diagnostics, timing = hybrid_retriever.search(
+            q, top_k=candidate_pool_size + 100, candidate_pool_size=500, method=method, alpha=alpha, return_diagnostics=True
+        )
+        
+        t_hydration_start = time.perf_counter()
+        # 2. Domain filtering and text hydration for candidate pool
+        from src.reranker.reranker import RerankCandidate
+        candidates = []
+        doc_metadata = {}
+        for doc_id, score in raw_results:
+            if len(candidates) >= candidate_pool_size:
+                break
+                
+            db_doc = session.query(DBDocument).filter_by(id=doc_id, is_deleted=False).first()
+            if db_doc is None:
+                continue
+
+            url = db_doc.url or "unknown-url"
+            if domain and domain.lower() not in url.lower():
+                continue
+
+            title = db_doc.title or "Untitled Document"
+            content = db_doc.content or ""
+            snippet_data = snippet_gen.generate(content, q)
+            text = f"{title}\n{snippet_data['text']}\n{content}"
+            candidates.append(RerankCandidate(
+                doc_id=doc_id,
+                text=text,
+                original_score=score
+            ))
+            
+            doc_metadata[doc_id] = {
+                "title": title,
+                "url": url,
+                "snippet_text": snippet_data["text"],
+                "matches": snippet_data["matches"],
+                "lexical_score": diagnostics.get(doc_id, {}).get('lexical_score'),
+                "dense_score": diagnostics.get(doc_id, {}).get('dense_score')
+            }
+
+        t_rerank_start = time.perf_counter()
+        # 3. Rerank candidate pool
+        if reranker and len(candidates) > 0:
+            try:
+                # Keep all candidates in order to apply pagination safely
+                reranked_cands = reranker.rerank(q, candidates, top_k=0)
+            except Exception as e:
+                print(f"Reranker failed, falling back to hybrid: {e}")
+                reranked_cands = candidates
+        else:
+            reranked_cands = candidates
+
+        t_rerank_end = time.perf_counter()
+        # 4. Apply offset/top_k
+        total = len(reranked_cands)
+        page = reranked_cands[offset: offset + top_k]
+
+        # 5. Hydrate final output
+        hydrated = []
+        for cand in page:
+            meta = doc_metadata[cand.doc_id]
+            hydrated.append(SearchResultModel(
+                doc_id=cand.doc_id,
+                title=meta["title"],
+                url=meta["url"],
+                score=cand.original_score,
+                snippet=meta["snippet_text"],
+                matches=meta["matches"],
+                lexical_score=meta["lexical_score"],
+                dense_score=meta["dense_score"],
+                hybrid_score=cand.original_score,
+                rerank_score=cand.rerank_score
+            ))
+            
+        t_total = time.perf_counter()
+        timing['hydration'] = t_rerank_start - t_hydration_start
+        timing['reranking'] = t_rerank_end - t_rerank_start
+        timing['total'] = t_total - t0
+        
+        from src.api.logger import logger
+        logger.log_search(
+            endpoint="/reranked-search",
+            query=q,
+            timing=timing,
+            total_results=total,
+            returned_results=len(page),
+            mode=f"reranked-{method}"
+        )
+
+        return {
+            "query":         q,
+            "total_results": total,
+            "offset":        offset,
+            "results":       hydrated,
+            "timing":        timing
+        }
+    finally:
+        session.close()

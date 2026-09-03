@@ -1,0 +1,530 @@
+{
+  "baseline_k1_1.5_b_0.75": {
+    "queries": [
+      {
+        "query": "os.path.join",
+        "expected_urls": [
+          "library/os.path.html",
+          "library/pathlib.html"
+        ],
+        "retrieved_top_10": [
+          {
+            "doc_id": "1c81e9a0659910b8dcc2c39de21adfe864fca512ccece9de19aa898454c4f9c4",
+            "score": 6.018445779312727
+          },
+          {
+            "doc_id": "073c61bb112d597fffc55e32fc0d90c89d940fd3a7851020d95d32c6d6616477",
+            "score": 4.649163175457708
+          },
+          {
+            "doc_id": "c6c84d4a80cc7a6c66b8500cd99f98ad3a1ce2ab26f390e9aea07ab7b1762717",
+            "score": 4.649163175457708
+          },
+          {
+            "doc_id": "0b274d19f2d09cf9854788d376d329f47888f2955524becd9ccfe3b77acf9559",
+            "score": 3.3674824919584743
+          },
+          {
+            "doc_id": "8b4f787d92bae56fd368ab99af08daa4e8d5cbc7694b2e692428a1fc4c4127e1",
+            "score": 3.3674824919584743
+          },
+          {
+            "doc_id": "bc435aea78788fc94e437e7ca5a8845903155fa8db87744b5a691b7f70e2c579",
+            "score": 2.000002746325626
+          },
+          {
+            "doc_id": "aaada28ea682d563c9e849430186b6f128f40a7c9856750213d9f66820d5c03d",
+            "score": 0.7933595572070964
+          }
+        ],
+        "metrics": {
+          "Precision@5": 0.4,
+          "Recall@5": 1.0,
+          "Precision@10": 0.2,
+          "Recall@10": 1.0,
+          "MRR": 1.0,
+          "NDCG@5": 1.0,
+          "NDCG@10": 1.0
+        }
+      },
+      {
+        "query": "json",
+        "expected_urls": [
+          "library/json.html"
+        ],
+        "retrieved_top_10": [
+          {
+            "doc_id": "1f244e6d1055e5d24a23ab6a3074af2a3e42f24b03f553c30858d3db117a187a",
+            "score": 6.528282420107102
+          },
+          {
+            "doc_id": "60e59cd4f858dad82e62e0f3d5f55b2c30df610e1bfe2abc8a67b07cc79f9cb8",
+            "score": 6.011292046456985
+          },
+          {
+            "doc_id": "28f0482cf11d882ade2048f65dd305434ce2582b3cec73b14ed18c415670ccd9",
+            "score": 5.80518164053794
+          },
+          {
+            "doc_id": "e972dac2a3182278989a42fa250973d2ea31936ac71eecaee6094a45d15b7801",
+            "score": 5.42640185934054
+          },
+          {
+            "doc_id": "3853c614ac3096e6abeead25f644303614554b2a72ab9e05ffc8b2c9b4b5cbbc",
+            "score": 5.416418997841272
+          },
+          {
+            "doc_id": "816dc39d75fbf1f8613156fbf8080156594b2286792d263f8752ceb006519d25",
+            "score": 4.976687618067823
+          },
+          {
+            "doc_id": "8ae8d948f262dd0a5f4c62abed21a5f8072015970d1ec92457e9df94478d9d81",
+            "score": 4.909330148418134
+          },
+          {
+            "doc_id": "72fcead644963619756d317ffe8ad5e6b146de48789c1ace8c444102333d2893",
+            "score": 4.8286422619627425
+          },
+          {
+            "doc_id": "63b20f357c1749d7285aad443948abcaefe8d6e4d8ce36021e0c390536e9ea27",
+            "score": 4.8286422619627425
+          },
+          {
+            "doc_id": "f6c9f412638069ac1e5730f2ac56a8d42a891cedaeea4b4b206176dd24b55f89",
+            "score": 4.789291510343358
+          }
+        ],
+        "metrics": {
+          "Precision@5": 0.2,
+          "Recall@5": 1.0,
+          "Precision@10": 0.1,
+          "Recall@10": 1.0,
+          "MRR": 1.0,
+          "NDCG@5": 1.0,
+          "NDCG@10": 1.0
+        }
+      },
+      {
+        "query": "asyncio event loop",
+        "expected_urls": [
+          "library/asyncio-eventloop.html",
+          "library/asyncio.html"
+        ],
+        "retrieved_top_10": [
+          {
+            "doc_id": "24fd813877643df64ce3ff1046b30831bed0d26f0e4cccf4c1edfb0105c76f69",
+            "score": 11.836184280922453
+          },
+          {
+            "doc_id": "063da0378b468a70a43c9f0980ec9230bd81e6e7f5f3f8fbb884241f4dc58a97",
+            "score": 11.680436104947255
+          },
+          {
+            "doc_id": "ac3728cca6142fbbfc7e0f50a57a694f2bea48b4a2df59f25a350d1d6b9bca3a",
+            "score": 11.644238510482854
+          },
+          {
+            "doc_id": "f0b927a57cd17b2b36dd54aa6dac26aa422b5fc8cf4ab14c8a73435414afa4a6",
+            "score": 11.604756726473708
+          },
+          {
+            "doc_id": "38e1999e5e29c168c96cb7a76d350470f8a878c896ed1033eea7559fbbab2fa4",
+            "score": 11.597078548750666
+          },
+          {
+            "doc_id": "fd79e4adde24b9bdbd7b9f5b06aa5cab6eef07cfceb615879bc687cb814deda5",
+            "score": 11.542498701717731
+          },
+          {
+            "doc_id": "6dc770ba32445144980f9b667d917db408b55db70dbcf51127eacc07075d9f6a",
+            "score": 11.419846706571072
+          },
+          {
+            "doc_id": "badb02ddb3b464efe5b08a9763136c9f45444cf5ca576487e880aefe1fc4d357",
+            "score": 11.33203411227834
+          },
+          {
+            "doc_id": "c7194123328ff4c2a8a39233042a93fc18910f287d08051a44dfd02f80b61ec2",
+            "score": 11.288691293286247
+          },
+          {
+            "doc_id": "4a353d920a96da49bac276ead8662406500e9766d30aca5a095f9a88ff4839cc",
+            "score": 10.927331931027066
+          }
+        ],
+        "metrics": {
+          "Precision@5": 0.2,
+          "Recall@5": 0.5,
+          "Precision@10": 0.1,
+          "Recall@10": 0.5,
+          "MRR": 0.3333333333333333,
+          "NDCG@5": 0.3065735963827292,
+          "NDCG@10": 0.3065735963827292
+        }
+      },
+      {
+        "query": "how to parse command line arguments",
+        "expected_urls": [
+          "library/argparse.html",
+          "howto/argparse.html",
+          "howto/argparse-optparse.html"
+        ],
+        "retrieved_top_10": [
+          {
+            "doc_id": "665f8fc1b08c6e989a16c5322db358c63d87db30963371743594b455b71437a6",
+            "score": 10.563255519789651
+          },
+          {
+            "doc_id": "e293ce4c93967adcfee511b5c1d9042d5fc3c69d619213e6631c0de4a79a7239",
+            "score": 10.551140749775666
+          },
+          {
+            "doc_id": "0c9d1cf30a639206d29f6dc7153f98de1dafc0e12cc80ffea8fe7652db89c5dd",
+            "score": 9.969312054294775
+          },
+          {
+            "doc_id": "a49a47d3e3e658dacaa0e8c4d77817aa1069fe446080969186e01bf1c945d2f6",
+            "score": 9.668897266775389
+          },
+          {
+            "doc_id": "51aac6e15a145e533fa015464b5c5c13d28199c0465132cfa709188de9d6da84",
+            "score": 9.668897266775389
+          },
+          {
+            "doc_id": "80851768c3e37640805849fb5a0a7d6c572b9ae655e8c9f721fbd6d85bef1b05",
+            "score": 9.402032643866177
+          },
+          {
+            "doc_id": "59b00b7e28e9e50136b31b2794debf49d3dd26c90f4245acde0514002bb2b774",
+            "score": 9.325477227906957
+          },
+          {
+            "doc_id": "debf9d0be395ea460b29c1b8a55ce7da331d394539e12444dc5c6f7851ef2b6b",
+            "score": 9.226339498877373
+          },
+          {
+            "doc_id": "329223b0d47c7aeeef7ea03c01542f27fefab38596517a6a27057a5543c4bad6",
+            "score": 9.226339498877373
+          },
+          {
+            "doc_id": "1f244e6d1055e5d24a23ab6a3074af2a3e42f24b03f553c30858d3db117a187a",
+            "score": 8.554661773650542
+          }
+        ],
+        "metrics": {
+          "Precision@5": 0.2,
+          "Recall@5": 0.3333333333333333,
+          "Precision@10": 0.1,
+          "Recall@10": 0.3333333333333333,
+          "MRR": 1.0,
+          "NDCG@5": 0.46927872602275644,
+          "NDCG@10": 0.46927872602275644
+        }
+      },
+      {
+        "query": "__init__",
+        "expected_urls": [
+          "reference/datamodel.html"
+        ],
+        "retrieved_top_10": [
+          {
+            "doc_id": "b9ed8757d9cec9c0df8ecc71fa2cbb500cbbcdaf5613a499f6e053fec2c82481",
+            "score": 4.490728183157088
+          },
+          {
+            "doc_id": "139a6308f96085a3e109d9c2a0bfaea25cf21f250aa43b6146021dfe23ff62b5",
+            "score": 4.150553252039374
+          },
+          {
+            "doc_id": "8ad6db711546974458ab2325dea20e80e4700bb3b4d2516bd89966157dd23eca",
+            "score": 4.080242957442344
+          },
+          {
+            "doc_id": "6db77ba862a051ee11210bbfd92eb720ad083c6767678974de21a79a68106b62",
+            "score": 3.900303189336033
+          },
+          {
+            "doc_id": "950a0adaee61815838cfcd50a197b22d907bb534d6373c2b83bec41e2db0d5b8",
+            "score": 3.8374066443523978
+          },
+          {
+            "doc_id": "c54eeae153237822eeb05c2c2b03e71dbe2c202c23ec48be748da29f4d80709c",
+            "score": 3.7961233773277194
+          },
+          {
+            "doc_id": "6dc770ba32445144980f9b667d917db408b55db70dbcf51127eacc07075d9f6a",
+            "score": 3.778912388961081
+          },
+          {
+            "doc_id": "09888e35abe06525feb90f5b572f61d6258c9462465167d98a0e4bc1faf4ad4f",
+            "score": 3.6313847682009737
+          },
+          {
+            "doc_id": "8637514148e83398adf6686456986adfe2e4922c9802096b24ac4d5b0c05a29d",
+            "score": 3.5172782850979805
+          },
+          {
+            "doc_id": "29b1d1e13117afbcb51e7f854cc1a4ad1657c6cb3761837bb4a8bed608009e8b",
+            "score": 3.509903063398981
+          }
+        ],
+        "metrics": {
+          "Precision@5": 0.0,
+          "Recall@5": 0.0,
+          "Precision@10": 0.0,
+          "Recall@10": 0.0,
+          "MRR": 0.0,
+          "NDCG@5": 0.0,
+          "NDCG@10": 0.0
+        }
+      },
+      {
+        "query": "regular expressions",
+        "expected_urls": [
+          "library/re.html",
+          "howto/regex.html"
+        ],
+        "retrieved_top_10": [
+          {
+            "doc_id": "cfd03f837d599e71b8adc7d63eee56d2a7843238526a04f1691a1a07f88eea9e",
+            "score": 8.491834482320646
+          },
+          {
+            "doc_id": "5166ba38e772d51e4d442dec8ebc399303b4e774896dc93d9b1ab6606d4518ce",
+            "score": 8.09993591580751
+          },
+          {
+            "doc_id": "9284df8cfbb4c71b5d8d00e2e1a9c2caba4684be891706bb4c3999282692702b",
+            "score": 7.878815661774745
+          },
+          {
+            "doc_id": "7c35b6231d376425ede29ff4cf473a2458dbc17356fb7aced6fc864e04fb59ed",
+            "score": 6.734462087396674
+          },
+          {
+            "doc_id": "86a6fbae4155d5de69a6e879f6b542758097b9ad54b1003db520cfab4717b409",
+            "score": 6.628719433094533
+          },
+          {
+            "doc_id": "5eff37c682841d71306e2eb7b016770f719789976631ecb5848963e2d321632a",
+            "score": 6.591092770021352
+          },
+          {
+            "doc_id": "0fc146d605a0a1e07f548f15f723fde65914c527af6b7019696ea7498fcaacd2",
+            "score": 6.393816514297833
+          },
+          {
+            "doc_id": "7f0bd1db85051259052336edd61eff7bd69147fc89b65040423ceab45ca96ca1",
+            "score": 6.2614811619556585
+          },
+          {
+            "doc_id": "90359aa4bd07736e4c4c52811fdbe8f7364284ead2f669d835ac9b8105012464",
+            "score": 6.218270671083836
+          },
+          {
+            "doc_id": "9b71645181e6d516abbfecec7bcd9838de39e70c3bea97cd67ed95829fb35b20",
+            "score": 6.15582105054129
+          }
+        ],
+        "metrics": {
+          "Precision@5": 0.4,
+          "Recall@5": 1.0,
+          "Precision@10": 0.2,
+          "Recall@10": 1.0,
+          "MRR": 0.5,
+          "NDCG@5": 0.6934264036172708,
+          "NDCG@10": 0.6934264036172708
+        }
+      },
+      {
+        "query": "subprocess run",
+        "expected_urls": [
+          "library/subprocess.html"
+        ],
+        "retrieved_top_10": [
+          {
+            "doc_id": "1e9242164316dda8b36121bf0d2dbdce391e6d732a41eb5877dca5b147e0b612",
+            "score": 7.887231387082726
+          },
+          {
+            "doc_id": "0d15be111ad50fd9ad4c9985d96110015903fe99e6e5d60dc93647ccb97a2529",
+            "score": 7.8616823595020096
+          },
+          {
+            "doc_id": "84432e5ede5f69285bc93052133f8aa84b0b4d0eebfcfffe1a3e3a661e34ce07",
+            "score": 7.428866975044937
+          },
+          {
+            "doc_id": "fd79e4adde24b9bdbd7b9f5b06aa5cab6eef07cfceb615879bc687cb814deda5",
+            "score": 7.404370157014751
+          },
+          {
+            "doc_id": "0ff3863cd48afd9825c38fce0f78494b336ca86c10f5ec23f6fbc896acee23f5",
+            "score": 7.062392355824487
+          },
+          {
+            "doc_id": "5eff37c682841d71306e2eb7b016770f719789976631ecb5848963e2d321632a",
+            "score": 6.663899563664602
+          },
+          {
+            "doc_id": "20ad77e3e5738005abc35c71fb39c6d01642aa0b7b232cb440adaed4b3f0bb5a",
+            "score": 6.651373657328183
+          },
+          {
+            "doc_id": "b4b6b1650035976f8a8cd6e4ed1bbb9c863c1c8b3693cb846ebdb9492a3b5992",
+            "score": 6.496961874321872
+          },
+          {
+            "doc_id": "ac3728cca6142fbbfc7e0f50a57a694f2bea48b4a2df59f25a350d1d6b9bca3a",
+            "score": 6.360096739075935
+          },
+          {
+            "doc_id": "24fd813877643df64ce3ff1046b30831bed0d26f0e4cccf4c1edfb0105c76f69",
+            "score": 6.22229480689768
+          }
+        ],
+        "metrics": {
+          "Precision@5": 0.2,
+          "Recall@5": 1.0,
+          "Precision@10": 0.1,
+          "Recall@10": 1.0,
+          "MRR": 0.5,
+          "NDCG@5": 0.6309297535714575,
+          "NDCG@10": 0.6309297535714575
+        }
+      }
+    ],
+    "metrics": {
+      "Precision@5": 0.22857142857142856,
+      "Recall@5": 0.6904761904761906,
+      "Precision@10": 0.11428571428571428,
+      "Recall@10": 0.6904761904761906,
+      "MRR": 0.6190476190476192,
+      "NDCG@5": 0.5857440685134592,
+      "NDCG@10": 0.5857440685134592
+    }
+  },
+  "parameter_sweep": [
+    {
+      "k1": 1.0,
+      "b": 0.5,
+      "metrics": {
+        "Precision@5": 0.22857142857142856,
+        "Recall@5": 0.6904761904761906,
+        "Precision@10": 0.11428571428571428,
+        "Recall@10": 0.6904761904761906,
+        "MRR": 0.7142857142857143,
+        "NDCG@5": 0.6499368481249385,
+        "NDCG@10": 0.6499368481249385
+      }
+    },
+    {
+      "k1": 1.0,
+      "b": 0.75,
+      "metrics": {
+        "Precision@5": 0.22857142857142856,
+        "Recall@5": 0.6904761904761906,
+        "Precision@10": 0.11428571428571428,
+        "Recall@10": 0.6904761904761906,
+        "MRR": 0.6190476190476192,
+        "NDCG@5": 0.5857440685134592,
+        "NDCG@10": 0.5857440685134592
+      }
+    },
+    {
+      "k1": 1.0,
+      "b": 1.0,
+      "metrics": {
+        "Precision@5": 0.2,
+        "Recall@5": 0.6190476190476192,
+        "Precision@10": 0.11428571428571428,
+        "Recall@10": 0.6904761904761906,
+        "MRR": 0.48214285714285715,
+        "NDCG@5": 0.48859783895093273,
+        "NDCG@10": 0.5162301823248285
+      }
+    },
+    {
+      "k1": 1.5,
+      "b": 0.5,
+      "metrics": {
+        "Precision@5": 0.22857142857142856,
+        "Recall@5": 0.6904761904761906,
+        "Precision@10": 0.11428571428571428,
+        "Recall@10": 0.6904761904761906,
+        "MRR": 0.7142857142857143,
+        "NDCG@5": 0.6499368481249385,
+        "NDCG@10": 0.6499368481249385
+      }
+    },
+    {
+      "k1": 1.5,
+      "b": 0.75,
+      "metrics": {
+        "Precision@5": 0.22857142857142856,
+        "Recall@5": 0.6904761904761906,
+        "Precision@10": 0.11428571428571428,
+        "Recall@10": 0.6904761904761906,
+        "MRR": 0.6190476190476192,
+        "NDCG@5": 0.5857440685134592,
+        "NDCG@10": 0.5857440685134592
+      }
+    },
+    {
+      "k1": 1.5,
+      "b": 1.0,
+      "metrics": {
+        "Precision@5": 0.2,
+        "Recall@5": 0.6190476190476192,
+        "Precision@10": 0.11428571428571428,
+        "Recall@10": 0.6904761904761906,
+        "MRR": 0.48214285714285715,
+        "NDCG@5": 0.48859783895093273,
+        "NDCG@10": 0.5162301823248285
+      }
+    },
+    {
+      "k1": 2.0,
+      "b": 0.5,
+      "metrics": {
+        "Precision@5": 0.22857142857142856,
+        "Recall@5": 0.6904761904761906,
+        "Precision@10": 0.11428571428571428,
+        "Recall@10": 0.6904761904761906,
+        "MRR": 0.7142857142857143,
+        "NDCG@5": 0.6499368481249385,
+        "NDCG@10": 0.6499368481249385
+      }
+    },
+    {
+      "k1": 2.0,
+      "b": 0.75,
+      "metrics": {
+        "Precision@5": 0.22857142857142856,
+        "Recall@5": 0.6904761904761906,
+        "Precision@10": 0.11428571428571428,
+        "Recall@10": 0.6904761904761906,
+        "MRR": 0.5476190476190477,
+        "NDCG@5": 0.5610016663624747,
+        "NDCG@10": 0.5610016663624747
+      }
+    },
+    {
+      "k1": 2.0,
+      "b": 1.0,
+      "metrics": {
+        "Precision@5": 0.2,
+        "Recall@5": 0.6190476190476192,
+        "Precision@10": 0.1285714285714286,
+        "Recall@10": 0.761904761904762,
+        "MRR": 0.48214285714285715,
+        "NDCG@5": 0.48859783895093273,
+        "NDCG@10": 0.5415500804368353
+      }
+    }
+  ],
+  "best_config": {
+    "k1": 1.0,
+    "b": 0.5
+  }
+}
