@@ -11,10 +11,11 @@ class Settings:
     LEXICAL_INDEX_PATH: str = os.getenv("LEXICAL_INDEX_PATH", "index.pkl")
     DENSE_INDEX_PATH: str = os.getenv("DENSE_INDEX_PATH", "dense.index")
     DENSE_MAP_PATH: str = os.getenv("DENSE_MAP_PATH", "dense_map.pkl")
+    CACHE_DIR: str = os.getenv("HF_HOME", "hf_cache")
     
     # Models
     DENSE_MODEL_NAME: str = os.getenv("DENSE_MODEL_NAME", "all-MiniLM-L6-v2")
-    CROSS_ENCODER_MODEL_NAME: str = os.getenv("CROSS_ENCODER_MODEL_NAME", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+    CROSS_ENCODER_MODEL_NAME: str = os.getenv("CROSS_ENCODER_MODEL_NAME", "ms-marco-TinyBERT-L-2-v2")
     
     # Security & CORS
     _cors_origins_raw = os.getenv("CORS_ALLOW_ORIGINS", '["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:5173"]')

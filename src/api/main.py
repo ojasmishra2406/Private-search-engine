@@ -10,6 +10,7 @@ import urllib.parse
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from src.api.security import get_authorized_doc_ids
 from pydantic import BaseModel
 from src.api.query_utils import normalize_query
 
@@ -52,18 +53,16 @@ async def lifespan(app: FastAPI):
     app_state["db"] = db
 
     # Dense Retrieval Initialization
-    logger.logger.info("Loading Dense Index...")
     try:
+        logger.logger.info("Loading Dense Index...")
         from src.dense.embeddings import EmbeddingModel
         from src.dense.vector_index import VectorIndex
         from src.dense.retriever import DenseRetriever
         
-        # Load embedding model and vector index
-        emb_model = EmbeddingModel(model_name=settings.DENSE_MODEL_NAME)
-        vector_index = VectorIndex(index_path=settings.DENSE_INDEX_PATH, map_path=settings.DENSE_MAP_PATH)
-        
-        app_state["dense_retriever"] = DenseRetriever(emb_model, vector_index)
-        logger.logger.info(f"Dense Index loaded successfully with {vector_index.total_docs} vectors.")
+        v_idx = VectorIndex(index_path=settings.DENSE_INDEX_PATH)
+        emb_model = EmbeddingModel(settings.DENSE_MODEL_NAME)
+        app_state["dense_retriever"] = DenseRetriever(emb_model, v_idx)
+        logger.logger.info(f"Dense Index loaded successfully with {v_idx.total_docs} vectors.")
     except Exception as e:
         logger.logger.error(f"Warning: Failed to load dense retrieval subsystem: {e}")
         app_state["dense_retriever"] = None
@@ -140,6 +139,9 @@ class SearchResultModel(BaseModel):
     lexical_score: Optional[float] = None
     dense_score: Optional[float] = None
     hybrid_score: Optional[float] = None
+    allowed_roles: str = "Public"
+    crag_score: float | None = None
+    crag_status: str | None = None
 
 
 
@@ -164,11 +166,20 @@ class SearchResponseModel(BaseModel):
     offset:        int
     results:       List[SearchResultModel]
     timing:        Optional[Dict[str, float]] = None
+    blocked_count: int = 0
+    fallback_triggered: bool = False
+    overall_confidence: float = 0.0
 
 
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+
+@app.get("/roles")
+def get_roles():
+    from src.api.security import ROLE_INHERITANCE
+    return {"roles": list(ROLE_INHERITANCE.keys())}
 
 @app.get("/health")
 def health_check():
@@ -242,9 +253,30 @@ def health_check():
     }
 
 
-@app.get("/search", response_model=SearchResponseModel)
+
+import math
+def calculate_crag_status(logit: float) -> tuple[float, str]:
+    if logit >= 0:
+        z = math.exp(-logit)
+        score = 1.0 / (1.0 + z)
+    else:
+        z = math.exp(logit)
+        score = z / (1.0 + z)
+        
+    if score >= 0.75:
+        status = "CORRECT"
+    elif score >= 0.30:
+        status = "AMBIGUOUS"
+    else:
+        status = "INCORRECT"
+        
+    return score, status
+
+@app.get("/search"
+, response_model=SearchResponseModel)
 def search(
     q:      str           = Query(...,  description="Search query"),
+    role:   str           = Query("Public", description="Simulated user role"),
     top_k:  int           = Query(20,   description="Number of results to return"),
     offset: int           = Query(0,    description="Zero-based result offset for pagination"),
     domain: Optional[str] = Query(None, description="Filter results to URLs containing this domain string"),
@@ -289,7 +321,8 @@ def search(
         # Over-fetch a fixed, large number of candidates so that total_results
         # is consistent regardless of the requested offset.  500 comfortably
         # exceeds the current 555-doc corpus while remaining fast.
-        raw_results = engine.search(q, top_k=500)
+        auth_str, auth_int, blocked_count = get_authorized_doc_ids(session, role)
+        raw_results = engine.search(q, authorized_int_ids=auth_int, top_k=500)
         t_lexical = time.perf_counter()
 
         hydrated: List[SearchResultModel] = []
@@ -299,7 +332,7 @@ def search(
         for res in raw_results:
             # Hydrate — skip tombstoned documents (is_deleted=True)
             db_doc = session.query(DBDocument).filter_by(
-                id=res.doc_id, is_deleted=False
+                int_id=res.doc_id, is_deleted=False
             ).first()
 
             if db_doc is None:
@@ -320,13 +353,14 @@ def search(
             snippet_data = snippet_gen.generate(content, q)
 
             hydrated.append(SearchResultModel(
-                doc_id=res.doc_id,
+                doc_id=str(res.doc_id),
                 title=title,
                 url=url,
                 score=res.score,
                 snippet=snippet_data["text"],
                 matches=snippet_data["matches"],
-                lexical_score=res.score
+                lexical_score=res.score,
+                allowed_roles=db_doc.allowed_roles or "Public"
             ))
 
         # Apply offset pagination
@@ -363,6 +397,7 @@ def search(
 @app.get("/dense-search", response_model=SearchResponseModel)
 def dense_search(
     q:      str           = Query(...,  description="Search query"),
+    role:   str           = Query("Public", description="Simulated user role"),
     top_k:  int           = Query(20,   description="Number of results to return"),
     offset: int           = Query(0,    description="Zero-based result offset for pagination"),
     domain: Optional[str] = Query(None, description="Filter results to URLs containing this domain string"),
@@ -393,7 +428,8 @@ def dense_search(
 
     try:
         t0 = time.perf_counter()
-        raw_results = dense_retriever.search(q, top_k=500)
+        auth_str, auth_int, blocked_count = get_authorized_doc_ids(session, role)
+        raw_results = dense_retriever.search(q, authorized_int_ids=auth_int, top_k=500)
         t_dense = time.perf_counter()
         
         hydrated: List[SearchResultModel] = []
@@ -402,7 +438,7 @@ def dense_search(
         seen_hashes = set()
         for doc_id, score in raw_results:
             db_doc = session.query(DBDocument).filter_by(
-                id=doc_id, is_deleted=False
+                int_id=doc_id, is_deleted=False
             ).first()
 
             if db_doc is None:
@@ -422,7 +458,7 @@ def dense_search(
             snippet_data = snippet_gen.generate(content, q)
 
             hydrated.append(SearchResultModel(
-                doc_id=doc_id,
+                doc_id=str(doc_id),
                 title=title,
                 url=url,
                 score=score,
@@ -464,6 +500,7 @@ def dense_search(
 @app.get("/hybrid-search", response_model=SearchResponseModel)
 def hybrid_search(
     q:      str           = Query(...,  description="Search query"),
+    role:   str           = Query("Public", description="Simulated user role"),
     top_k:  int           = Query(20,   description="Number of results to return"),
     offset: int           = Query(0,    description="Zero-based result offset for pagination"),
     domain: Optional[str] = Query(None, description="Filter results to URLs containing this domain string"),
@@ -496,8 +533,9 @@ def hybrid_search(
 
     try:
         t0 = time.perf_counter()
+        auth_str, auth_int, blocked_count = get_authorized_doc_ids(session, role)
         raw_results, diagnostics, timing = hybrid_retriever.search(
-            q, top_k=500, candidate_pool_size=settings.MAX_CANDIDATE_POOL, method=method, alpha=alpha, return_diagnostics=True
+            q, authorized_int_ids=auth_int, top_k=500, candidate_pool_size=settings.MAX_CANDIDATE_POOL, method=method, alpha=alpha, return_diagnostics=True
         )
         t_hydration_start = time.perf_counter()
         
@@ -506,7 +544,7 @@ def hybrid_search(
 
         for doc_id, score in raw_results:
             db_doc = session.query(DBDocument).filter_by(
-                id=doc_id, is_deleted=False
+                int_id=doc_id, is_deleted=False
             ).first()
 
             if db_doc is None:
@@ -527,7 +565,7 @@ def hybrid_search(
 
             diag = diagnostics.get(doc_id, {})
             hydrated.append(SearchResultModel(
-                doc_id=doc_id,
+                doc_id=str(doc_id),
                 title=title,
                 url=url,
                 score=score,
@@ -570,6 +608,7 @@ def hybrid_search(
 @app.get("/reranked-search", response_model=SearchResponseModel)
 def reranked_search(
     q:      str           = Query(...,  description="Search query"),
+    role:   str           = Query("Public", description="Simulated user role"),
     top_k:  int           = Query(20,   description="Number of results to return"),
     offset: int           = Query(0,    description="Zero-based result offset for pagination"),
     domain: Optional[str] = Query(None, description="Filter results to URLs containing this domain string"),
@@ -607,8 +646,9 @@ def reranked_search(
     try:
         t0 = time.perf_counter()
         # 1. Retrieve candidates
+        auth_str, auth_int, blocked_count = get_authorized_doc_ids(session, role)
         raw_results, diagnostics, timing = hybrid_retriever.search(
-            q, top_k=candidate_pool_size + 100, candidate_pool_size=settings.MAX_CANDIDATE_POOL, method=method, alpha=alpha, return_diagnostics=True
+            q, authorized_int_ids=auth_int, top_k=candidate_pool_size + 100, candidate_pool_size=settings.MAX_CANDIDATE_POOL, method=method, alpha=alpha, return_diagnostics=True
         )
         
         t_hydration_start = time.perf_counter()
@@ -622,7 +662,7 @@ def reranked_search(
             if len(candidates) >= candidate_pool_size:
                 break
                 
-            db_doc = session.query(DBDocument).filter_by(id=doc_id, is_deleted=False).first()
+            db_doc = session.query(DBDocument).filter_by(int_id=doc_id, is_deleted=False).first()
             if db_doc is None:
                 continue
                 
@@ -639,24 +679,27 @@ def reranked_search(
             snippet_data = snippet_gen.generate(content, q)
             text = f"{title}\n{snippet_data['text']}\n{content}"
             candidates.append(RerankCandidate(
-                doc_id=doc_id,
+                doc_id=str(doc_id),
                 text=text,
                 original_score=score
             ))
             
-            doc_metadata[doc_id] = {
+            doc_metadata[str(doc_id)] = {
                 "title": title,
                 "url": url,
                 "snippet_text": snippet_data["text"],
                 "matches": snippet_data["matches"],
                 "lexical_score": diagnostics.get(doc_id, {}).get('lexical_score'),
-                "dense_score": diagnostics.get(doc_id, {}).get('dense_score')
+                "dense_score": diagnostics.get(doc_id, {}).get('dense_score'),
+                "allowed_roles": db_doc.allowed_roles
             }
 
         t_rerank_start = time.perf_counter()
         # 3. Rerank candidate pool
         if reranker and len(candidates) > 0:
             try:
+                # Prune to Top 15 before cross-encoder latency optimization
+                candidates = candidates[:15]
                 # Keep all candidates in order to apply pagination safely
                 reranked_cands = reranker.rerank(q, candidates, top_k=0)
             except Exception as e:
@@ -670,10 +713,30 @@ def reranked_search(
         total = len(reranked_cands)
         page = reranked_cands[offset: offset + top_k]
 
+        # Evaluate global fallback triggered based on TOP-1 candidate GLOBALLY (not per page)
+        fallback_triggered = False
+        overall_confidence = 0.0
+        
+        if reranked_cands:
+            top_cand = reranked_cands[0]
+            # Ensure we use raw cross-encoder logit, not RRF score
+            raw_logit = top_cand.rerank_score if top_cand.rerank_score is not None else -99.0
+            overall_confidence, _ = calculate_crag_status(raw_logit)
+            
+            if overall_confidence < 0.30:
+                fallback_triggered = True
+        else:
+            fallback_triggered = True
+
         # 5. Hydrate final output
         hydrated = []
         for cand in page:
             meta = doc_metadata[cand.doc_id]
+            
+            # Evaluate CRAG for the specific candidate
+            cand_logit = cand.rerank_score if cand.rerank_score is not None else -99.0
+            crag_score, crag_status = calculate_crag_status(cand_logit)
+            
             hydrated.append(SearchResultModel(
                 doc_id=cand.doc_id,
                 title=meta["title"],
@@ -684,7 +747,10 @@ def reranked_search(
                 lexical_score=meta["lexical_score"],
                 dense_score=meta["dense_score"],
                 hybrid_score=cand.original_score,
-                rerank_score=cand.rerank_score
+                rerank_score=cand_logit,
+                crag_score=crag_score,
+                crag_status=crag_status,
+                allowed_roles=meta.get("allowed_roles", "Public")
             ))
             
         t_total = time.perf_counter()
@@ -707,7 +773,9 @@ def reranked_search(
             "total_results": total,
             "offset":        offset,
             "results":       hydrated,
-            "timing":        timing
+            "timing":        timing,
+            "fallback_triggered": fallback_triggered,
+            "overall_confidence": overall_confidence
         }
     finally:
         session.close()
@@ -759,49 +827,76 @@ def crawl_website(req: CrawlRequestModel):
     # from the same URL appearing under multiple canonical forms in one batch
     crawl_session_ids: set = set()
 
-    for url, title, content_text in crawler.crawl():
+    from sqlalchemy import func
+    max_int_id_result = session.query(func.max(DBDocument.int_id)).scalar()
+    next_int_id = (max_int_id_result or 0) + 1
+
+    # Fetch all items concurrently from async crawler
+    results = crawler.crawl()
+    
+    # 1. Fetch all existing documents matching the extracted doc_ids
+    doc_ids = [hashlib.sha256(url.encode('utf-8')).hexdigest() for url, _, _ in results]
+    existing_docs = session.query(DBDocument).filter(DBDocument.id.in_(doc_ids)).all()
+    existing_map = {d.id: d for d in existing_docs}
+    
+    new_docs = []
+    
+    for url, title, content_text in results:
         pages_crawled += 1
         doc_id = hashlib.sha256(url.encode('utf-8')).hexdigest()
         content_hash = hashlib.sha256(content_text.encode('utf-8')).hexdigest()
+        
+        # RBAC Role Assignment
+        lower_url = url.lower()
+        if any(token in lower_url for token in ['/eng/', '/dev/', '/tech/']):
+            assigned_role = 'Engineering'
+        elif any(token in lower_url for token in ['/hr/', '/careers/', '/people/']):
+            assigned_role = 'HR'
+        elif any(token in lower_url for token in ['/finance/', '/pricing/', '/billing/']):
+            assigned_role = 'Finance'
+        elif any(token in lower_url for token in ['/admin/', '/internal/']):
+            assigned_role = 'Admin'
+        else:
+            assigned_role = 'Public'
         
         # Skip if we already stored this doc_id in this crawl batch
         if doc_id in crawl_session_ids:
             continue
 
-        try:
-            existing = session.query(DBDocument).filter_by(id=doc_id).first()
-            if existing:
-                if existing.content_hash == content_hash:
-                    crawl_session_ids.add(doc_id)
-                    continue
-                existing.title = title
-                existing.content = content_text
-                existing.content_hash = content_hash
-                existing.url = url
-                existing.version += 1
-                existing.indexing_status = IndexingStatus.PENDING.value
-                existing.updated_at = datetime.now(timezone.utc)
-                session.flush()
-                pages_stored += 1
-            else:
-                db_doc = DBDocument(
-                    id=doc_id,
-                    title=title,
-                    content=content_text,
-                    url=url,
-                    content_hash=content_hash,
-                    created_at=datetime.now(timezone.utc),
-                    version=1,
-                    indexing_status=IndexingStatus.PENDING.value
-                )
-                session.add(db_doc)
-                session.flush()
-                pages_stored += 1
-            crawl_session_ids.add(doc_id)
-        except Exception as doc_err:
-            logger.logger.warning("Failed to store doc %s (%s): %s", doc_id, url, str(doc_err))
-            session.rollback()
-            # Continue crawling remaining pages - one failure must not abort everything
+        existing = existing_map.get(doc_id)
+        if existing:
+            if existing.content_hash == content_hash and existing.allowed_roles == assigned_role:
+                crawl_session_ids.add(doc_id)
+                continue
+            existing.title = title
+            existing.content = content_text
+            existing.content_hash = content_hash
+            existing.url = url
+            existing.version += 1
+            existing.allowed_roles = assigned_role
+            existing.indexing_status = IndexingStatus.PENDING.value
+            existing.updated_at = datetime.now(timezone.utc)
+            pages_stored += 1
+        else:
+            db_doc = DBDocument(
+                id=doc_id,
+                int_id=next_int_id,
+                title=title,
+                content=content_text,
+                url=url,
+                content_hash=content_hash,
+                allowed_roles=assigned_role,
+                created_at=datetime.now(timezone.utc),
+                version=1,
+                indexing_status=IndexingStatus.PENDING.value
+            )
+            new_docs.append(db_doc)
+            next_int_id += 1
+            pages_stored += 1
+        crawl_session_ids.add(doc_id)
+
+    if new_docs:
+        session.bulk_save_objects(new_docs)
 
     try:
         session.commit()
@@ -863,3 +958,21 @@ def crawl_website(req: CrawlRequestModel):
         max_depth=req.max_depth,
         same_domain_only=req.same_domain_only
     )
+
+from fastapi.responses import StreamingResponse
+from src.rag.generator import StreamingRAGGenerator
+
+@app.get("/rag/stream")
+async def rag_stream(q: str = Query(...), role: str = Query("Public"), domain: Optional[str] = None):
+    # 1. Reuse reranked-search logic to get candidates
+    search_resp = reranked_search(q=q, role=role, top_k=20, offset=0, domain=domain, candidate_pool_size=50, method="weighted", alpha=0.40)
+    
+    generator = StreamingRAGGenerator()
+    
+    # 2. Check CRAG
+    if search_resp.get('fallback_triggered', False) or not search_resp.get('results', []):
+        return StreamingResponse(generator.fallback_stream(), media_type="text/event-stream")
+        
+    # 3. Generate Answer
+    top_docs = search_resp.get('results', [])[:3]
+    return StreamingResponse(generator.generate_stream(q, top_docs), media_type="text/event-stream")

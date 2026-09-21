@@ -65,8 +65,8 @@ class IncrementalIndexer:
         deleted_ids = []
         for doc in deleted_docs:
             try:
-                self.index.delete_document(doc.id)
-                deleted_ids.append(doc.id)
+                self.index.delete_document(doc.int_id)
+                deleted_ids.append(doc.int_id)
                 doc.indexing_status = IndexingStatus.INDEXED.value
                 stats['deleted'] += 1
             except Exception as e:
@@ -95,11 +95,11 @@ class IncrementalIndexer:
             try:
                 # Lexical Indexing
                 tokens = self.tokenizer.tokenize(doc.content)
-                self.index.add_document(doc.id, tokens)
+                self.index.add_document(doc.int_id, tokens)
                 
                 # Dense Indexing collection
                 if dense_indexer:
-                    dense_batch_ids.append(doc.id)
+                    dense_batch_ids.append(doc.int_id)
                     dense_batch_texts.append(doc.content)
                 
                 doc.indexing_status = IndexingStatus.INDEXED.value

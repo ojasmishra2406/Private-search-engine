@@ -58,12 +58,17 @@ function App() {
   const [pageSize, setPageSize]       = useState(20)
   const [results, setResults]       = useState([])
   const [loading, setLoading]       = useState(false)
+  const [simulatedRole, setSimulatedRole] = useState('Public')
   const [error, setError]           = useState(null)
   const [total, setTotal]           = useState(0)
   const [offset, setOffset]         = useState(0)
   const [currentQuery, setCurrentQuery] = useState('') 
   const [hasSearched, setHasSearched]   = useState(false)
   const [timing, setTiming]         = useState(null)
+  const [fallbackTriggered, setFallbackTriggered] = useState(false)
+  const [synthesize, setSynthesize] = useState(false)
+  const [ragAnswer, setRagAnswer] = useState('')
+  const [isSynthesizing, setIsSynthesizing] = useState(false)
 
   const [crawlUrl, setCrawlUrl] = useState('')
   const [crawlMaxPages, setCrawlMaxPages] = useState(20)
@@ -75,6 +80,67 @@ function App() {
   const [healthStats, setHealthStats] = useState(null)
   const [healthLoading, setHealthLoading] = useState(true)
   const [healthError, setHealthError] = useState(null)
+
+
+  // Ref to hold the current EventSource
+  const eventSourceRef = React.useRef(null);
+
+  const startRagStream = (searchQuery, role) => {
+      if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+      }
+      setRagAnswer('');
+      setIsSynthesizing(true);
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+      const eventSource = new EventSource(`${baseUrl}/rag/stream?q=${encodeURIComponent(searchQuery)}&role=${encodeURIComponent(role)}`);
+      eventSourceRef.current = eventSource;
+      
+      eventSource.onmessage = (event) => {
+          if (event.data === '[DONE]') {
+              eventSource.close();
+              setIsSynthesizing(false);
+              return;
+          }
+          try {
+              const data = JSON.parse(event.data);
+              if (data.token) {
+                  setRagAnswer(prev => prev + data.token);
+              }
+          } catch (e) {
+              console.error(e);
+          }
+      };
+      
+      eventSource.onerror = (err) => {
+          console.error("SSE Error", err);
+          eventSource.close();
+          setIsSynthesizing(false);
+      };
+  }
+  
+  const handleSynthesizeToggle = (e) => {
+      const isChecked = e.target.checked;
+      setSynthesize(isChecked);
+      if (hasSearched && currentQuery) {
+          if (isChecked) {
+              startRagStream(currentQuery, simulatedRole);
+          } else {
+              if (eventSourceRef.current) {
+                  eventSourceRef.current.close();
+              }
+              setRagAnswer('');
+              setIsSynthesizing(false);
+          }
+      }
+  }
+
+  const handleRoleChange = (e) => {
+      const newRole = e.target.value;
+      setSimulatedRole(newRole);
+      if (hasSearched && currentQuery) {
+          performSearch(currentQuery, 0, searchMode, pageSize, newRole);
+      }
+  }
 
   const fetchHealth = async () => {
     setHealthLoading(true)
@@ -130,7 +196,8 @@ function App() {
     }
   }
 
-  const performSearch = async (searchQuery, currentOffset, mode, currentPageSize = pageSize) => {
+  const performSearch = async (searchQuery, currentOffset, mode, currentPageSize = pageSize, overrideRole = null) => {
+      const activeRole = overrideRole || simulatedRole;
     if (!searchQuery.trim()) return
     setLoading(true)
     setError(null)
@@ -140,7 +207,8 @@ function App() {
       let params = new URLSearchParams({
           q: searchQuery,
           top_k: currentPageSize,
-          offset: currentOffset
+          offset: currentOffset,
+          role: activeRole
       })
 
       if (mode === 'dense') {
@@ -169,6 +237,11 @@ function App() {
       setCurrentQuery(searchQuery)
       setHasSearched(true)
       setTiming(data.timing || null)
+      setFallbackTriggered(data.fallback_triggered || false)
+
+      if (synthesize) {
+          startRagStream(searchQuery, activeRole);
+      }
     } catch (err) {
       setError(err.message)
     } finally {
@@ -237,6 +310,30 @@ function App() {
                   <button type="submit" className="search-submit" disabled={loading}>
                     {loading ? '...' : 'Search'}
                   </button>
+                </div>
+                <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#495057' }}>
+                  <input 
+                    type="checkbox" 
+                    id="synthesizeToggle" 
+                    checked={synthesize} 
+                    onChange={handleSynthesizeToggle} 
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="synthesizeToggle" style={{ cursor: 'pointer', fontWeight: '500' }}>
+                    ? Synthesize Answer with RAG
+                  </label>
+                  <span style={{ marginLeft: '12px', color: '#6c757d' }}>Role:</span>
+                  <select 
+                    value={simulatedRole} 
+                    onChange={handleRoleChange}
+                    style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ced4da', fontSize: '14px' }}
+                  >
+                    <option value="Public">Public</option>
+                    <option value="Engineering">Engineering</option>
+                    <option value="HR">HR</option>
+                    <option value="Finance">Finance</option>
+                    <option value="Admin">Admin</option>
+                  </select>
                 </div>
               </form>
               

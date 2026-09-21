@@ -17,6 +17,7 @@ class HybridRetriever:
     def search(
         self, 
         query: str, 
+        authorized_int_ids: set = None,
         top_k: int = 10, 
         candidate_pool_size: int = 100, 
         method: str = 'rrf', 
@@ -27,13 +28,19 @@ class HybridRetriever:
         t_start = time.perf_counter()
         
         # Lexical search
-        bm25_raw = self.lexical_retriever.search(query, top_k=candidate_pool_size)
-        bm25_candidates = [(res.doc_id, res.score) for res in bm25_raw]
+        if self.lexical_retriever:
+            bm25_raw = self.lexical_retriever.search(query, authorized_int_ids=authorized_int_ids, top_k=candidate_pool_size)
+            bm25_candidates = [(res.doc_id, res.score) for res in bm25_raw]
+        else:
+            bm25_candidates = []
         t_lexical = time.perf_counter()
         
         # Dense search
         try:
-            dense_candidates = self.dense_retriever.search(query, top_k=candidate_pool_size)
+            if self.dense_retriever:
+                dense_candidates = self.dense_retriever.search(query, authorized_int_ids=authorized_int_ids, top_k=candidate_pool_size)
+            else:
+                dense_candidates = []
         except Exception as e:
             dense_candidates = []
         t_dense = time.perf_counter()

@@ -10,7 +10,7 @@ class DenseRetriever:
         self.model = model
         self.vector_index = vector_index
 
-    def search(self, query: str, top_k: int = 5) -> List[Tuple[str, float]]:
+    def search(self, query: str, authorized_int_ids: set = None, top_k: int = 5) -> List[Tuple[int, float]]:
         if not query or not query.strip():
             return []
             
@@ -19,4 +19,4 @@ class DenseRetriever:
         query_embedding = query_vector.reshape(1, -1)
         
         # Dispatch to FAISS ANN index
-        return self.vector_index.search(query_embedding, top_k=top_k)
+        return self.vector_index.search(query_embedding, authorized_int_ids=authorized_int_ids, top_k=top_k)

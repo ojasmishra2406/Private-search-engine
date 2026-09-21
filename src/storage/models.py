@@ -28,6 +28,7 @@ class DBDocument(Base):
 
     # --- Core identity (unchanged) ---
     id           = Column(String, primary_key=True)  # SHA256 of URL path
+    int_id       = Column(Integer, unique=True, index=True) # Unified Int64 for FAISS
     title        = Column(String, nullable=False)
     content      = Column(Text,   nullable=False)
     url          = Column(String, nullable=True)
@@ -55,6 +56,9 @@ class DBDocument(Base):
     indexing_status = Column(
         String, default=IndexingStatus.PENDING.value, nullable=False
     )
+
+    # --- Role-Based Access Control (RBAC) ---
+    allowed_roles = Column(String, default="Public", nullable=False, index=True)
 
 
 class IndexVersion(Base):

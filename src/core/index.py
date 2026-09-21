@@ -14,18 +14,13 @@ class InvertedIndex:
         self.id_to_term: Dict[int, str] = {}
         self.next_term_id: int = 0
         
-        # Document ID mapping: external_id (str) -> doc_id (int)
-        self.ext_to_int_doc_id: Dict[str, int] = {}
-        self.int_to_ext_doc_id: Dict[int, str] = {}
-        self.next_doc_id: int = 0
-        
         # Inverted Index: term_id -> List[Posting]
         self.postings: Dict[int, List[Posting]] = {}
         
-        # Forward Index: doc_id -> List[term_id] (used for index maintenance/deletions)
+        # Forward Index: int_id -> List[term_id] (used for index maintenance/deletions)
         self.forward_index: Dict[int, List[int]] = {}
         
-        # Document Statistics: doc_id -> doc_length (tokens)
+        # Document Statistics: int_id -> doc_length (tokens)
         self.doc_lengths: Dict[int, int] = {}
         self.total_docs: int = 0
         self.total_tokens: int = 0
@@ -40,25 +35,12 @@ class InvertedIndex:
             return tid
         return self.term_to_id[term]
 
-    def _get_or_create_doc_id(self, ext_id: str) -> int:
-        if ext_id not in self.ext_to_int_doc_id:
-            did = self.next_doc_id
-            self.ext_to_int_doc_id[ext_id] = did
-            self.int_to_ext_doc_id[did] = ext_id
-            self.next_doc_id += 1
-            return did
-        return self.ext_to_int_doc_id[ext_id]
-
-    def add_document(self, ext_id: str, tokens: List[str]):
+    def add_document(self, int_id: int, tokens: List[str]):
         """Adds a document to the index. Updates it if it already exists."""
         # If document exists, delete it first to ensure clean state
-        if ext_id in self.ext_to_int_doc_id:
-            did = self.ext_to_int_doc_id[ext_id]
-            if did in self.forward_index:
-                self.delete_document(ext_id)
+        if int_id in self.forward_index:
+            self.delete_document(int_id)
                 
-        doc_id = self._get_or_create_doc_id(ext_id)
-        
         term_positions: Dict[int, List[int]] = {}
         term_ids: List[int] = []
         
@@ -70,46 +52,42 @@ class InvertedIndex:
             term_positions[tid].append(pos)
             
         # Update Forward Index
-        self.forward_index[doc_id] = term_ids
+        self.forward_index[int_id] = term_ids
         
         # Update Postings
         for tid, positions in term_positions.items():
             self.postings[tid].append(Posting(
-                doc_id=doc_id,
+                doc_id=int_id,
                 term_freq=len(positions),
                 positions=positions
             ))
             
         # Update Document Statistics
         doc_length = len(tokens)
-        self.doc_lengths[doc_id] = doc_length
+        self.doc_lengths[int_id] = doc_length
         self.total_docs += 1
         self.total_tokens += doc_length
 
-    def delete_document(self, ext_id: str):
+    def delete_document(self, int_id: int):
         """Removes a document from the index using the forward index."""
-        if ext_id not in self.ext_to_int_doc_id:
+        if int_id not in self.forward_index:
             return
             
-        doc_id = self.ext_to_int_doc_id[ext_id]
-        if doc_id not in self.forward_index:
-            return
-            
-        term_ids = self.forward_index[doc_id]
+        term_ids = self.forward_index[int_id]
         unique_term_ids = set(term_ids)
         
         # Remove from inverted index
         for tid in unique_term_ids:
-            self.postings[tid] = [p for p in self.postings[tid] if p.doc_id != doc_id]
+            self.postings[tid] = [p for p in self.postings[tid] if p.doc_id != int_id]
             
         # Update statistics
-        doc_length = self.doc_lengths[doc_id]
+        doc_length = self.doc_lengths[int_id]
         self.total_docs -= 1
         self.total_tokens -= doc_length
         
         # Remove from forward index and lengths
-        del self.forward_index[doc_id]
-        del self.doc_lengths[doc_id]
+        del self.forward_index[int_id]
+        del self.doc_lengths[int_id]
         
     def get_average_document_length(self) -> float:
         if self.total_docs == 0:

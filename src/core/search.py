@@ -1,19 +1,6 @@
-"""
-Lexical search pipeline.
-
-Query flow:
-    raw query string
-        → Tokenizer (same as indexing)
-        → term dictionary lookup
-        → candidate doc IDs (union of posting lists)
-        → BM25 scoring per candidate
-        → top-K selection
-        → SearchResult list (sorted by descending score, ties broken by ascending doc_id)
-"""
-
 import heapq
 from dataclasses import dataclass
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Set
 from .tokenizer import Tokenizer
 from .index import InvertedIndex, Posting
 from .bm25 import BM25Scorer
@@ -21,7 +8,7 @@ from .bm25 import BM25Scorer
 
 @dataclass
 class SearchResult:
-    doc_id: str  # external document ID
+    doc_id: int  # Unified int_id
     score: float
 
 
@@ -32,14 +19,16 @@ class LexicalSearch:
         self.tokenizer = tokenizer
         self.scorer = BM25Scorer(index, k1=k1, b=b)
 
-    def search(self, query: str, top_k: int = 10) -> List[SearchResult]:
+    def search(self, query: str, authorized_int_ids: Set[int] = None, top_k: int = 10) -> List[SearchResult]:
         """
         Execute a lexical BM25 search.
-
+        Pre-filters strictly on authorized_int_ids if provided.
         Returns up to top_k results sorted by descending BM25 score.
-        Ties are broken by ascending internal doc_id for determinism.
         """
         if top_k <= 0:
+            return []
+            
+        if authorized_int_ids is not None and len(authorized_int_ids) == 0:
             return []
 
         # Tokenize query using the same tokenizer as indexing
@@ -70,6 +59,13 @@ class LexicalSearch:
 
         if not candidate_doc_ids:
             return []
+            
+        # BM25 Inverted Index Pre-Filtering (Step 4 Requirement)
+        if authorized_int_ids is not None:
+            candidate_doc_ids = candidate_doc_ids.intersection(authorized_int_ids)
+            
+        if not candidate_doc_ids:
+            return []
 
         # Find phrases
         import re
@@ -93,7 +89,6 @@ class LexicalSearch:
 
         results: List[SearchResult] = []
         for score, _neg_id, doc_id in top:
-            ext_id = self.index.int_to_ext_doc_id[doc_id]
-            results.append(SearchResult(doc_id=ext_id, score=score))
+            results.append(SearchResult(doc_id=doc_id, score=score))
 
         return results
