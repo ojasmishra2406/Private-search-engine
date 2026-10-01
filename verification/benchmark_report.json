@@ -1,7 +1,7 @@
 {
   "latencies": {
     "/reranked-search": {
-      "p50_ms": 156.75,
+      "p50_ms": 207.77,
       "delta_notes": "Significant reduction due to ONNX INT8 quantization"
     }
   },

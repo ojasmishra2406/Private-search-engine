@@ -82,7 +82,7 @@ class LexicalSearch:
         for doc_id in candidate_doc_ids:
             score = self.scorer.score_document_fast(doc_id, query_term_ids, term_postings, phrase_term_ids)
             # Heap key: (score, -doc_id) - min-heap on score, max-heap on -doc_id
-            scored.append((score, -doc_id, doc_id))
+            scored.append((score, -doc_id if isinstance(doc_id, int) else -hash(doc_id), doc_id))
 
         # Top-K via nlargest (correct and clear for V1 corpus sizes)
         top = heapq.nlargest(top_k, scored, key=lambda x: (x[0], x[1]))

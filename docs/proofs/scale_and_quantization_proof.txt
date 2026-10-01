@@ -1,0 +1,10 @@
+--- BENCHMARK: FAISS HNSW SCALE (24,000 Vectors) ---
+Index built in 1.53 seconds.
+HNSW ANN Search Latency (batch=100, k=10): 0.05 ms per query
+
+--- BENCHMARK: RERANKER QUANTIZATION (FP32 vs INT8) ---
+Loading FP32 PyTorch CrossEncoder baseline...
+FP32 PyTorch Latency (Batch=16): 160.40 ms
+Loading INT8 ONNX FlashRank model...
+INT8 ONNX Latency (Batch=16): 359.21 ms
+Latency Reduction: -123.9%

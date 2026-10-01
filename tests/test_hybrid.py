@@ -13,7 +13,7 @@ class MockLexicalSearch:
     def __init__(self, results):
         self.results = results
         
-    def search(self, query: str, top_k: int):
+    def search(self, query: str, authorized_int_ids=None, top_k: int = 10):
         return [MockLexicalSearchResult(doc_id, score) for doc_id, score in self.results][:top_k]
 
 class MockDenseRetriever:
@@ -21,7 +21,7 @@ class MockDenseRetriever:
         self.results = results
         self.fail = fail
         
-    def search(self, query: str, top_k: int):
+    def search(self, query: str, authorized_int_ids=None, top_k: int = 10):
         if self.fail:
             raise Exception("Dense index unavailable")
         return self.results[:top_k]

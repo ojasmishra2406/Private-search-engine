@@ -51,7 +51,7 @@ class VectorIndex:
         if not int_ids or len(int_ids) != vectors.shape[0]:
             return
             
-        ids_array = np.array(int_ids, dtype=np.int64)
+        ids_array = np.array([i if isinstance(i, int) else hash(i) for i in int_ids], dtype=np.int64)
         
         # Remove existing vectors for these IDs to avoid duplicates (IndexIDMap appends)
         try:
@@ -66,7 +66,7 @@ class VectorIndex:
         """Removes vectors corresponding to the provided integer IDs."""
         if not int_ids:
             return
-        ids_array = np.array(int_ids, dtype=np.int64)
+        ids_array = np.array([i if isinstance(i, int) else hash(i) for i in int_ids], dtype=np.int64)
         try:
             self.index.remove_ids(ids_array)
         except RuntimeError as e:
