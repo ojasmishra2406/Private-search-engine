@@ -657,19 +657,28 @@ def reranked_search(
         candidates = []
         doc_metadata = {}
         seen_hashes = set()
-        
+        # BATCH FETCH
+        doc_ids_to_fetch = [doc_id for doc_id, score in raw_results[:candidate_pool_size + 100]]
+        if doc_ids_to_fetch:
+            db_docs = session.query(DBDocument).filter(
+                DBDocument.int_id.in_(doc_ids_to_fetch), 
+                DBDocument.is_deleted == False
+            ).all()
+            db_doc_map = {d.int_id: d for d in db_docs}
+        else:
+            db_doc_map = {}
+
         for doc_id, score in raw_results:
             if len(candidates) >= candidate_pool_size:
                 break
                 
-            db_doc = session.query(DBDocument).filter_by(int_id=doc_id, is_deleted=False).first()
+            db_doc = db_doc_map.get(doc_id)
             if db_doc is None:
                 continue
                 
             if db_doc.content_hash in seen_hashes:
                 continue
             seen_hashes.add(db_doc.content_hash)
-
             url = db_doc.url or "unknown-url"
             if domain and domain.lower() not in url.lower():
                 continue

@@ -65,7 +65,8 @@ def weighted_fusion(
 def reciprocal_rank_fusion(
     bm25_results: List[Tuple[str, float]], 
     dense_results: List[Tuple[str, float]], 
-    k: int = 60
+    k: int = 60,
+    alpha: float = 0.5
 ) -> List[Tuple[str, float]]:
     """
     Combines BM25 and Dense results using Reciprocal Rank Fusion (RRF).
@@ -82,10 +83,10 @@ def reciprocal_rank_fusion(
     
     # rank is 1-indexed
     for rank, (doc_id, _) in enumerate(bm25_results, start=1):
-        rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + (1.0 / (k + rank))
+        rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + (alpha * (1.0 / (k + rank)))
         
     for rank, (doc_id, _) in enumerate(dense_results, start=1):
-        rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + (1.0 / (k + rank))
+        rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + (alpha * (1.0 / (k + rank)))
         
     fused = list(rrf_scores.items())
     

@@ -54,7 +54,7 @@ class HybridRetriever:
         if method == 'weighted':
             fused = weighted_fusion(bm25_candidates, dense_candidates, alpha=alpha)
         elif method == 'rrf':
-            fused = reciprocal_rank_fusion(bm25_candidates, dense_candidates, k=rrf_k)
+            fused = reciprocal_rank_fusion(bm25_candidates, dense_candidates, k=rrf_k, alpha=alpha)
         else:
             raise ValueError(f"Unknown hybrid method: {method}")
         t_fusion = time.perf_counter()

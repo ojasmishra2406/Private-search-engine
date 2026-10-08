@@ -100,15 +100,15 @@ def test_weighted_fusion_invalid_alpha():
 def test_rrf_basic():
     bm25 = [("docA", 10.0), ("docB", 5.0)]
     dense = [("docB", 0.9), ("docC", 0.8)]
-    res = reciprocal_rank_fusion(bm25, dense, k=60)
+    res = reciprocal_rank_fusion(bm25, dense, k=60, alpha=0.5)
     scores = {doc_id: score for doc_id, score in res}
     
     # docA rank 1 in BM25 -> 1/61
-    assert scores["docA"] == 1/61
+    assert scores["docA"] == 0.5 * 1/61
     # docB rank 2 in BM25 -> 1/62, rank 1 in dense -> 1/61
-    assert scores["docB"] == (1/62) + (1/61)
+    assert scores["docB"] == 0.5 * ((1/62) + (1/61))
     # docC rank 2 in dense -> 1/62
-    assert scores["docC"] == 1/62
+    assert scores["docC"] == 0.5 * 1/62
     
     # Sorted order: docB > docA > docC
     assert res[0][0] == "docB"
@@ -130,7 +130,7 @@ def test_stable_deterministic_ordering_tied_scores():
     # Force tie
     bm25 = [("docZ", 10.0), ("docA", 10.0)]
     dense = []
-    res = reciprocal_rank_fusion(bm25, dense, k=60)
+    res = reciprocal_rank_fusion(bm25, dense, k=60, alpha=0.5)
     # docZ rank 1 -> 1/61, docA rank 2 -> 1/62
     # Wait, RRF depends on input rank. Let's make ranks tie by doing identical rank across lists
     bm25_tie = [("docZ", 10.0)]
