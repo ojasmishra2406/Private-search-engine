@@ -26,8 +26,8 @@ def run_grid_search():
         qrel_dict[qid][docid] = score
 
     print("Loading indices...")
-    indexer = IncrementalIndexer("scifact_lexical.pkl")
-    v_index = VectorIndex(384, "scifact_dense.index")
+    indexer = IncrementalIndexer("data/scifact_lexical.pkl")
+    v_index = VectorIndex(384, "data/scifact_dense.index")
     embed_model = EmbeddingModel()
     
     lex_search = LexicalSearch(indexer.index, indexer.tokenizer)

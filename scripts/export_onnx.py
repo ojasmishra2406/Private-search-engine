@@ -10,7 +10,7 @@ dummy_input = tokenizer("This is a test sentence.", return_tensors="pt")
 torch.onnx.export(
     model, 
     (dummy_input["input_ids"], dummy_input["attention_mask"], dummy_input["token_type_ids"]),
-    "all-MiniLM-L6-v2.onnx",
+    "data/all-MiniLM-L6-v2.onnx",
     input_names=["input_ids", "attention_mask", "token_type_ids"],
     output_names=["last_hidden_state", "pooler_output"],
     dynamic_axes={
@@ -21,4 +21,4 @@ torch.onnx.export(
         "pooler_output": {0: "batch_size"}
     }
 )
-print("ONNX model exported to all-MiniLM-L6-v2.onnx")
+print("ONNX model exported to data/all-MiniLM-L6-v2.onnx")

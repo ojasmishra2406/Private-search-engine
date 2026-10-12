@@ -7,7 +7,7 @@ class EmbeddingModel:
         self.model_name = model_name
         self.dimension = 384
         
-        onnx_path = "all-MiniLM-L6-v2.onnx"
+        onnx_path = "data/all-MiniLM-L6-v2.onnx" if os.path.exists("data/all-MiniLM-L6-v2.onnx") else "all-MiniLM-L6-v2.onnx"
         if os.path.exists(onnx_path):
             import onnxruntime as ort
             from transformers import AutoTokenizer

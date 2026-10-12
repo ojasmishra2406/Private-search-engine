@@ -19,7 +19,7 @@ def main():
     
     print("Loading ONNX Model...")
     tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
-    session = ort.InferenceSession("all-MiniLM-L6-v2.onnx", providers=["CPUExecutionProvider"])
+    session = ort.InferenceSession("data/all-MiniLM-L6-v2.onnx", providers=["CPUExecutionProvider"])
     
     queries = [
         "What is the impact of COVID-19 on global supply chains?",

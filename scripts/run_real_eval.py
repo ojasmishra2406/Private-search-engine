@@ -16,10 +16,10 @@ def evaluate_lexical_real():
     valid_query_ids = set([str(q["query-id"]) for q in valid_qrels])
     queries = [q for q in queries if str(q["_id"]) in valid_query_ids]
     
-    with open("scifact_lexical.pkl", "rb") as f:
+    with open("data/scifact_lexical.pkl", "rb") as f:
         idx = pickle.load(f)
     # The tokenizer was initialized with the indexer
-    indexer = IncrementalIndexer("scifact_lexical.pkl")
+    indexer = IncrementalIndexer("data/scifact_lexical.pkl")
     indexer.index = idx
     
     lex_search = LexicalSearch(indexer.index, indexer.tokenizer)

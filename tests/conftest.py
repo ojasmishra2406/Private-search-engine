@@ -21,6 +21,8 @@ def isolated_production_artifacts(tmp_path_factory):
     for f in [prod_db, prod_lexical, prod_dense, prod_dense_map]:
         if os.path.exists(f):
             shutil.copy2(f, str(tmp_dir / f))
+        elif os.path.exists(os.path.join("data", "legacy_root_artifacts", f)):
+            shutil.copy2(os.path.join("data", "legacy_root_artifacts", f), str(tmp_dir / f))
             
     # Override settings dynamically for the session
     db_path = str(tmp_dir / prod_db)

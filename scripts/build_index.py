@@ -11,8 +11,8 @@ def build_index():
     corpus = load_dataset("BeIR/scifact", "corpus")["corpus"]
     
     print(f"Indexing SciFact corpus ({len(corpus)} documents)...")
-    indexer = IncrementalIndexer("scifact_lexical.pkl")
-    v_index = VectorIndex(384, "scifact_dense.index")
+    indexer = IncrementalIndexer("data/scifact_lexical.pkl")
+    v_index = VectorIndex(384, "data/scifact_dense.index")
     embed_model = EmbeddingModel()
     
     texts = []
@@ -25,7 +25,7 @@ def build_index():
         texts.append(text)
         ids.append(i)
         
-    with open("scifact_lexical.pkl", "wb") as f:
+    with open("data/scifact_lexical.pkl", "wb") as f:
         pickle.dump(indexer.index, f)
         
     t1 = time.time()

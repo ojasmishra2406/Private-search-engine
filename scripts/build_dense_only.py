@@ -8,7 +8,7 @@ def build_dense():
     corpus = load_dataset("BeIR/scifact", "corpus")["corpus"]
     
     print(f"Indexing {len(corpus)} dense vectors...")
-    v_index = VectorIndex(384, "scifact_dense.index")
+    v_index = VectorIndex(384, "data/scifact_dense.index")
     embed_model = EmbeddingModel()
     
     texts = []

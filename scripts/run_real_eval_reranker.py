@@ -23,8 +23,8 @@ def evaluate_full_pipeline():
     queries = [q for q in queries if str(q["_id"]) in valid_query_ids]
     
     print("Loading pre-built indexes and models...")
-    indexer = IncrementalIndexer("scifact_lexical.pkl")
-    v_index = VectorIndex(384, "scifact_dense.index")
+    indexer = IncrementalIndexer("data/scifact_lexical.pkl")
+    v_index = VectorIndex(384, "data/scifact_dense.index")
     embed_model = EmbeddingModel()
     
     ce_model = CrossEncoderModel(model_name="ms-marco-TinyBERT-L-2-v2")

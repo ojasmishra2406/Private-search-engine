@@ -29,8 +29,8 @@ def analyze_degradation():
         ground_truth_map[qid].append(cid)
 
     print("Loading models and indexes...")
-    indexer = IncrementalIndexer("scifact_lexical.pkl")
-    v_index = VectorIndex(384, "scifact_dense.index")
+    indexer = IncrementalIndexer("data/scifact_lexical.pkl")
+    v_index = VectorIndex(384, "data/scifact_dense.index")
     embed_model = EmbeddingModel()
     lex_search = LexicalSearch(indexer.index, indexer.tokenizer)
     dense_search = DenseRetriever(embed_model, v_index)
