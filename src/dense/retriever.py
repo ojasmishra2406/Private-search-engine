@@ -1,5 +1,6 @@
 from typing import List, Tuple
 from src.dense.vector_index import VectorIndex
+import time
 
 class DenseRetriever:
     """
@@ -14,9 +15,14 @@ class DenseRetriever:
         if not query or not query.strip():
             return []
             
-        # Encode single query string utilizing LRU cache
+        t_enc_start = time.perf_counter()
         query_vector = self.model.encode_query(query)
         query_embedding = query_vector.reshape(1, -1)
+        t_enc_end = time.perf_counter()
         
-        # Dispatch to FAISS ANN index
-        return self.vector_index.search(query_embedding, authorized_int_ids=authorized_int_ids, top_k=top_k)
+        t_faiss_start = time.perf_counter()
+        res = self.vector_index.search(query_embedding, authorized_int_ids=authorized_int_ids, top_k=top_k)
+        t_faiss_end = time.perf_counter()
+        
+        print(f"DEBUG DENSE: encode={(t_enc_end - t_enc_start)*1000:.2f}ms, faiss={(t_faiss_end - t_faiss_start)*1000:.2f}ms")
+        return res

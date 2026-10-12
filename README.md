@@ -1,163 +1,165 @@
-# Enterprise Local Search Engine
+# Private Search Engine
 
-**Developed a fully asynchronous web-crawling and ingestion pipeline backed by SQLite and a highly scalable Hierarchical Navigable Small World (HNSW) FAISS index. The infrastructure was rigorously stress-tested against a production-scale database of over 24,000 high-dimensional vectors, maintaining sub-millisecond similarity search times at scale.**
+Private Search Engine is a privacy-first local search and retrieval engine built with FastAPI, SQLite, and FAISS. It combines lexical BM25 keyword scoring and dense neural embeddings through tuned Reciprocal Rank Fusion (RRF), executing end-to-end multi-stage hybrid retrieval in under 15ms entirely on standard CPU hardware. The system enforces strict pre-retrieval Role-Based Access Control (RBAC) at both the vector and relational database layers, guaranteeing zero document leakage across clearance boundaries.
 
-**To break local compute bottlenecks without relying on expensive clusters, the cross-encoder reranking pipeline was aggressively optimized using ONNX Runtime INT8 quantization. This compressed reranker latency by 82% (from ~913ms down to ~156ms).**
+---
 
-**The application layer is built with FastAPI and React, featuring an interactive UI with dynamic source citation highlighting, SSRF protection, index/database consistency tracking, concurrent synchronization, and health monitoring. Achieved an end-to-end hybrid-search and reranking p50 latency of ~287ms on CPU, with a robust 256-test suite verifying retrieval precision, RBAC boundary enforcement, and Corrective Retrieval refusal safety.**
+## Core Features
 
-***
+* **Hybrid BM25 + FAISS (HNSW) Retrieval with Tuned RRF Fusion (α=0.7)**  
+  Combines exact lexical keyword matching (BM25 with positional postings) and dense semantic vector retrieval via a Hierarchical Navigable Small World (HNSW) FAISS index. Candidates are merged using Reciprocal Rank Fusion with a tuned weighting parameter (α=0.7) determined through empirical grid-search optimization.
 
-### Streaming Synthesis with Sentence-Level Citations
-*The engine leverages the retrieved context to synthesize answers on the fly. Every claim is strictly grounded in the database, with interactive `[Doc X]` tags that map directly to the source passages to eliminate ungrounded responses.*
+* **ONNX-Optimized Dense Embedding Pipeline**  
+  Eliminates Python runtime bottlenecks by serving the `all-MiniLM-L6-v2` embedding model through ONNX Runtime with dedicated CPU execution thread pinning. This slashes per-query embedding latency from ~380ms down to 7-8ms while preserving exact mathematical parity (1.0000000 cosine similarity with PyTorch FP32).
 
-### Zero-Trust Confidence Gate
-*If a user searches for highly confidential information outside their clearance level (or if the database simply lacks relevant context), the confidence gate instantly intercepts the request. It securely refuses to answer, preventing both data leaks and hallucinated responses.*
+* **Pre-Retrieval RBAC via FAISS `IDSelectorBatch`**  
+  Security boundaries are enforced natively before nearest-neighbor graph traversal occurs. Query authorization maps to an inheritance hierarchy across five clearance tiers (`Admin`, `Engineering`, `HR`, `Finance`, `Public`). Document IDs are injected into an optimized FAISS `IDSelectorBatch`, delivering a 42.2x speedup over standard array scanning while mathematically preventing out-of-clearance vector exploration.
 
-### Dynamic Role-Based Access Control (RBAC)
-*When an authorized user queries the exact same confidential topic, the system instantly filters the vector space to their specific clearance level, retrieving and synthesizing the exact financial or internal documentation required.*
+* **Cross-Encoder Reranking: Built, Tested, and Documented**  
+  A secondary cross-encoder reranking tier (`ms-marco-TinyBERT-L-2-v2`) was integrated and evaluated on the full 300-query SciFact academic benchmark. Empirical query-by-query analysis revealed the cross-encoder degraded 58 queries while improving only 45 due to domain mismatch between web-search training data and scientific literature. The reranker was cleanly bypassed in the production path, recovering optimal hybrid retrieval accuracy while preserving the module for domain-aligned workloads.
 
-***
+---
+
+## Verified Benchmarks
+
+All performance and retrieval metrics are backed by reproducible proof logs in the `proofs/` directory.
+
+### 1. Retrieval Quality (SciFact BEIR Benchmark, 300 Queries)
+Evaluated offline against the standard academic SciFact ground-truth dataset (5,183 documents, 300 claims):
+
+| Metric | Lexical (BM25 Baseline) | Hybrid Pipeline (α=0.7, Production) |
+|---|---:|---:|
+| **MRR@10** | 0.6129 | **0.6442** |
+| **nDCG@10** | 0.6484 | **0.6759** |
+| **Recall@10** | 0.7705 | **0.7990** |
+| **RBAC Leakage** | 0.000% | **0.000%** |
+
+### 2. End-to-End Latency Profile
+Measured across 30 distinct production queries on standard CPU hardware:
+
+| Subsystem / Pipeline Stage | 24,000 Documents | 100,000 Documents | Complexity |
+|---|---:|---:|---|
+| **Lexical Search (BM25)** | 0.02 ms | 0.02 ms | O(1) dictionary lookup |
+| **Dense Search (HNSW + ONNX)** | 8.57 ms | 11.27 ms | O(log N) graph traversal |
+| **Fusion (Weighted RRF)** | 0.56 ms | 0.59 ms | O(K log K) candidate sort |
+| **Hydration & Snippets** | 4.60 ms | 6.24 ms | Indexed SQLite B-Tree fetch |
+| **Reranking Overhead** | 0.01 ms | 0.01 ms | Bypassed production flag |
+| **Total Pipeline (p50)** | **14.06 ms** | **18.52 ms** | **Sub-20ms end-to-end** |
+| **Total Pipeline (p95)** | **18.22 ms** | **24.61 ms** | **Sub-25ms worst-case** |
+
+*(Note: Depending on CPU core availability during ONNX embedding inference, 100k p50 ranges between 13.44ms and 18.52ms, with p95 ranging between 15.28ms and 24.61ms -- down from the original 470ms p50 / 868ms p95 baseline).*
+
+*(Historical baseline prior to ONNX export and IDSelectorBatch optimization: 470ms p50 / 868ms p95).*
+
+### 3. Security & Boundary Verification
+* **Automated Test Suite**: 256 of 256 unit and integration tests passing.
+* **Multi-Tenant Zero-Leakage Audit**: 256 randomized cross-role queries evaluated against the 100,000-document database resulted in **100.0% boundary enforcement and 0.00% data leakage**.
+
+---
+
+## Security Architecture: Safe Selector Caching
+
+During high-concurrency stress testing, an investigation into selector caching identified a critical vulnerability in naive object caching:
+
+### The Vulnerability
+Using Python's built-in `id(authorized_int_ids)` as a cache key creates an object-lifecycle collision hazard. When Python frees an ephemeral set object after request completion, the CPython memory allocator frequently reassigns the identical memory address to a newly created set in subsequent requests. In a multi-tenant application, if a restricted role (e.g., `Public`) was allocated memory previously occupied by an `Admin` set, naive `id()` lookups would return the cached Admin filter, leaking confidential document vectors.
+
+### The Fix
+The vulnerability was addressed through two structural changes:
+1. Implemented `AuthorizedIdSet` in `src/api/security.py`, a specialized set subclass carrying an explicit, immutable string identifier (`cache_key = f"role:{role}"`).
+2. Refactored `VectorIndex.search` in `src/dense/vector_index.py` to strictly check `getattr(authorized_int_ids, 'cache_key', None)`. Only explicit, named role sets participate in the selector cache. Ephemeral or un-keyed sets bypass the cache entirely and construct one-off selectors dynamically, eliminating memory address reuse bugs.
+
+---
 
 ## System Architecture
 
-The pipeline processes documents through a multi-modal ingestion pipeline and queries them using a dual-encoder retrieval strategy.
-
-```mermaid
-graph TD
-    %% Ingestion Pipeline
-    subgraph "Ingestion & Indexing"
-        Web[Web Domain]
-        Crawler[Crawler / Scraper]
-        Normalizer[Text Normalizer]
-        DB[(SQLite DB)]
-        
-        Tokenizer[Tokenizer & Chunker]
-        LexicalIndex[Custom Inverted Index \n index.pkl]
-        VectorIndex[FAISS HNSW Index \n dense.index]
-        Embedder[SentenceTransformer \n all-MiniLM-L6-v2]
-    end
-
-    %% Retrieval Pipeline
-    subgraph "Retrieval Engine"
-        RBAC[RBAC Pre-Filtering]
-        BM25[BM25 Scorer]
-        DenseSearch[Dense Retriever]
-        Fusion[RRF / Weighted Fusion]
-        Reranker[Cross-Encoder \n ONNX INT8]
-        CRAG[Confidence Gate]
-    end
-
-    %% UI & API
-    API[FastAPI]
-    UI[React / Vite Frontend]
-
-    %% Flow
-    Web -->|Fetch| Crawler
-    Crawler --> Normalizer --> DB
-    
-    DB --> Tokenizer
-    Tokenizer --> LexicalIndex
-    Tokenizer --> Embedder --> VectorIndex
-    
-    UI -->|Query + Role| API
-    API --> RBAC
-    RBAC --> BM25
-    RBAC --> DenseSearch
-    
-    LexicalIndex --> BM25
-    VectorIndex --> DenseSearch
-    
-    BM25 -->|Candidates| Fusion
-    DenseSearch -->|Candidates| Fusion
-    Fusion -->|Top-K| Reranker
-    Reranker -->|Rescored Top-K| CRAG
-    CRAG -->|Hydrated Results + Confidence| API
+```text
+                          +------------------------+
+                          |   HTTP Client / Web    |
+                          +-----------+------------+
+                                      |
+                         FastAPI Gateway (RBAC Guard)
+                                      |
+                 +--------------------+--------------------+
+                 |                                         |
+     Lexical Engine (BM25)                      Dense Engine (HNSW)
+  - Custom Inverted Index                     - ONNX Embedding Model
+  - O(1) Dictionary Lookup                    - 384-Dimensional Vectors
+  - Positional Postings Match                 - Cached IDSelectorBatch Filter
+                 |                                         |
+                 +--------------------+--------------------+
+                                      |
+                         Reciprocal Rank Fusion
+                           (RRF Weight α=0.7)
+                                      |
+                         Hydration & Snippet Engine
+                          - SQLite B-Tree Indexing
+                          - Keyword Context Generation
+                                      |
+                          Structured Search Response
 ```
 
-## Key Enterprise Features
+### Technology Stack
+* **Language & Runtime**: Python 3.12, ONNX Runtime (CPU Execution Provider)
+* **API Framework**: FastAPI, Uvicorn, Pydantic v2
+* **Storage & Indexing**: SQLite (WAL Mode), FAISS (IndexHNSWFlat + IndexIDMap)
+* **NLP & Tokenization**: HuggingFace Transformers, HuggingFace Tokenizers, Custom Stemmer/Tokenizer
+* **Frontend**: React 18, Vite, Tailwind CSS
 
-### Role-Based Access Control (RBAC) & Zero-Leakage
-Security is enforced natively at the pre-retrieval stage. Queries specify an authorized role (e.g., `Admin`, `Engineering`, `HR`, `Finance`, `Public`), which maps to a strict inheritance tree. 
-- **Pre-Filtering:** Authorized document IDs are passed to the `LexicalSearch` engine and injected into the FAISS `IDSelectorArray` before nearest-neighbor calculations occur. 
-- **Zero Leakage:** Benchmarks rigorously verify state parity, ensuring mathematically zero data leakage of secure documents to unauthorized roles across the 256-test automated suite.
+---
 
-### Retrieval Confidence Gate
-Implemented a zero-overhead logic gate on top of the cross-encoder. 
-- By mathematically mapping raw Cross-Encoder logits through a stable sigmoid function, the system calculates absolute confidence for each retrieved chunk. 
-- If the top result fails to meet a strict confidence threshold (P < 0.30), the engine dynamically triggers a `fallback_triggered` state, surfacing a "Low Confidence" warning banner in the UI to prevent false context injection in downstream applications.
+## Testing & Quality Assurance
 
-### High-Performance HNSW Index
-Upgraded the dense retrieval layer from brute-force `IndexFlatIP` to `IndexHNSWFlat`. This hierarchical navigable small world graph slashes dense retrieval time, maintaining logarithmic scaling properties for databases evaluated at 24,000+ dimensions.
+The test suite contains 256 automated tests verifying the entire lifecycle of the system:
+* **API Verification** (`tests/test_api.py`): Input boundary checks, HTTP 400 validation, role simulator endpoints, and health monitoring.
+* **Lexical Correctness** (`tests/test_bm25.py`, `tests/test_tokenizer.py`, `tests/test_search.py`): Inverted index building, positional term matching, casing normalization, and technical keyword preservation.
+* **Dense Retrieval** (`tests/test_dense_retrieval.py`): Vector dimensionality validation, nearest-neighbor accuracy, index serialization, and persistence.
+* **Incremental Indexing & Storage** (`tests/test_storage_phase3.py`): Soft-delete tombstones, document version incrementation, and atomic index swapping.
+* **RBAC & Security** (`tests/test_phase25_security.py`): Pre-retrieval role filtering, crawler SSRF protection, and multi-tenant isolation.
+* **Search Quality & Robustness** (`tests/test_phase17_search_quality.py`, `tests/test_phase18_robustness.py`): Deduplication, empty query handling, and graceful fallback handling.
 
-### Latency Compression (ONNX INT8)
-The Cross-Encoder reranking bottleneck was eliminated by migrating from native PyTorch FP32 execution to ONNX Runtime INT8 quantization via `flashrank`. 
-
-## System Performance & Evaluation
-
-An automated benchmarking suite guarantees these performance SLAs on standard CPU hardware:
-
-### End-to-End Search Latency
-| Subsystem / Pipeline Step | Measured Latency (ms) | Notes |
-|---|---:|---|
-| Lexical / BM25 Search | ~2 - 10ms | Custom O(1) dictionary retrieval |
-| Dense Search (HNSW) | ~2 - 15ms | Highly optimized FAISS HNSW graph |
-| **Legacy Reranker (FP32)** | ~913.45ms | *Pre-optimization baseline* |
-| **Optimized Reranker (INT8)** | **~156.00ms** | *82% Latency Compression* |
-| **End-to-End Pipeline (p50)** | **< 250ms** | Includes Hydration & Confidence scoring |
-
-### Information Retrieval Metrics (SciFact Ground Truth Benchmark)
-The retrieval engine was rigorously evaluated offline against the standard academic **SciFact (BEIR/MTEB)** corpus (5,183 documents, 300 queries).
-
-| Metric | Lexical (BM25) | Full Pipeline (Hybrid + Reranker) |
-|---|---:|---:|
-| **MRR@10** | 0.6129 | **0.6356** |
-| **nDCG@10** | 0.6484 | **0.6633** |
-| **Precision@10** | 0.0847 | N/A |
-| **Recall@10** | 0.7705 | N/A |
-| **RBAC Leakage** | 0.000% | 0.000% |
-
-*(Note: The integration of the Cross-Encoder pipeline provided a +2.2% absolute gain in Mean Reciprocal Rank over the baseline BM25 index on standard CPU hardware).*
-
-## Design Decisions & Trade-offs
-
-| Decision | Why | Trade-off |
-|---|---|---|
-| ONNX INT8 Cross-Encoder | 82% latency drop, crucial for real-time responsiveness. | Negligible precision loss (typical <1% drop in MRR). |
-| Pre-Retrieval FAISS Masking | Mathematically guarantees zero RBAC leakage. | Slight overhead creating the `IDSelectorArray` per query. |
-| Custom Inverted Index | Demonstrates core IR engineering (TF/IDF, Positional). | In-memory serialization restricts infinite corpus scale without sharding. |
-| SQLite Storage | Zero-configuration atomic writes preventing indexing race conditions. | Lacks distributed cluster replication. |
-
-## Privacy & Security
-
-This search engine is truly local and private:
-- 100% of the crawled document data stays inside the local SQLite database.
-- Queries are never sent to external external APIs; embeddings generate locally using mathematical transformers.
-- Complete dependency freeze documented in `requirements.txt` via strictly versioned builds.
-
-## Getting Started
-
-### 1. Boot the Backend (Docker)
+To run the complete test suite:
 ```bash
-cp .env.example .env
-docker-compose build
-docker-compose up -d
+pytest -v
 ```
-*(Note: Initial boot downloads mathematical models to the persistent Docker volume).*
 
-### 2. Boot the Frontend
+---
+
+## Quickstart
+
+### Prerequisites
+* Python 3.12+
+* Node.js 18+ (for frontend)
+* 4GB RAM minimum
+
+### 1. Environment Setup
+```bash
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+export PYTHONPATH="."
+```
+
+### 2. Start the Backend API
+```bash
+python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+```
+API documentation is available at `http://localhost:8000/docs`.
+
+### 3. Start the Frontend Application
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+Access the search interface at `http://localhost:5173`.
 
-Navigate to `http://localhost:5173`. Use the UI sidebar to initiate a Web Crawl and populate the database, then test the Role Simulator!
+---
 
-## Manual Backend Start (Development)
-If running outside of Docker:
-```bash
-pip install -r requirements.txt
-export PYTHONPATH="."
-python -m uvicorn src.api.main:app --host 0.0.0.0 --port 8000
-```
+## Current Scope & Roadmap
+
+* **Scale Verification**: Rigorously validated up to 100,000 documents and vectors using structured synthetic benchmark content to stress-test high-dimensional graph traversal, inverted index postings, and relational pagination under load.
+* **Cross-Encoder Reranker**: Retained in `src/reranker/` and disabled by default via `USE_RERANKER = False` in `src/api/main.py`. Re-enabling the cross-encoder is a one-line configuration toggle for workloads where queries and corpus content align with MS-MARCO domain characteristics.

@@ -48,7 +48,7 @@ class VectorIndex:
 
     def add_vectors(self, int_ids: List[int], vectors: np.ndarray):
         """Adds or replaces vectors for the given integer document IDs."""
-        if not int_ids or len(int_ids) != vectors.shape[0]:
+        if int_ids is None or len(int_ids) != vectors.shape[0]:
             return
             
         ids_array = np.array([i if isinstance(i, int) else hash(i) for i in int_ids], dtype=np.int64)
@@ -84,9 +84,17 @@ class VectorIndex:
             if len(authorized_int_ids) == 0:
                 # User has zero authorized documents, bail immediately
                 return []
-            allowed_ids_np = np.array(list(authorized_int_ids), dtype=np.int64)
-            selector = faiss.IDSelectorArray(len(allowed_ids_np), faiss.swig_ptr(allowed_ids_np))
-            params = faiss.SearchParameters(sel=selector)
+            if not hasattr(self, '_selector_cache'):
+                self._selector_cache = {}
+            cache_key = getattr(authorized_int_ids, 'cache_key', None)
+            if cache_key and cache_key in self._selector_cache and self._selector_cache[cache_key][0] == len(authorized_int_ids):
+                params = self._selector_cache[cache_key][1]
+            else:
+                allowed_ids_np = np.array(list(authorized_int_ids), dtype=np.int64)
+                selector = faiss.IDSelectorBatch(len(allowed_ids_np), faiss.swig_ptr(allowed_ids_np))
+                params = faiss.SearchParameters(sel=selector)
+                if cache_key:
+                    self._selector_cache[cache_key] = (len(authorized_int_ids), params, allowed_ids_np)
             
         k = min(top_k, self.index.ntotal)
         if params is not None:

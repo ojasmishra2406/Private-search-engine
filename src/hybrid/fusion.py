@@ -86,7 +86,7 @@ def reciprocal_rank_fusion(
         rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + (alpha * (1.0 / (k + rank)))
         
     for rank, (doc_id, _) in enumerate(dense_results, start=1):
-        rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + (alpha * (1.0 / (k + rank)))
+        rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + ((1.0 - alpha) * (1.0 / (k + rank)))
         
     fused = list(rrf_scores.items())
     

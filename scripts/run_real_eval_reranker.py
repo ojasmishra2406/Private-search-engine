@@ -1,3 +1,4 @@
+import onnxruntime
 import time
 from datasets import load_dataset
 from src.evaluation.metrics import mrr_at_k, ndcg_at_k
@@ -42,6 +43,7 @@ def evaluate_full_pipeline():
     
     mrr_sum = 0.0
     ndcg_sum = 0.0
+    recall_sum = 0.0
     count = 0
     
     qrel_dict = {}
@@ -59,7 +61,7 @@ def evaluate_full_pipeline():
         query_text = q["text"]
         
         # 1. Hybrid Search (fetch top 50 candidates)
-        hybrid_res = hybrid_search.search(query_text, top_k=50, method='rrf')
+        hybrid_res = hybrid_search.search(query_text, top_k=50, method='rrf', alpha=0.7)
         
         # 2. Text Hydration
         candidates = []
@@ -72,7 +74,11 @@ def evaluate_full_pipeline():
             
         # 3. Rerank
         if candidates:
-            reranked_cands = reranker.rerank(query_text, candidates, top_k=0)
+            USE_RERANKER = False
+            if USE_RERANKER:
+                reranked_cands = reranker.rerank(query_text, candidates, top_k=0)
+            else:
+                reranked_cands = sorted(candidates, key=lambda x: x.original_score, reverse=True)
             
             # Map back to string IDs based on reranked order
             retrieved_ids = [int_to_ext[c.doc_id] for c in reranked_cands[:10]] # Top 10 for eval
@@ -80,9 +86,11 @@ def evaluate_full_pipeline():
             retrieved_ids = []
         
         mrr = mrr_at_k(retrieved_ids, ground_truth, k=10)
+        recall = len(set(retrieved_ids).intersection(ground_truth)) / len(ground_truth)
         ndcg = ndcg_at_k(retrieved_ids, ground_truth, k=10)
         
         mrr_sum += mrr
+        recall_sum += recall
         ndcg_sum += ndcg
         count += 1
         
@@ -96,6 +104,7 @@ def evaluate_full_pipeline():
     if count > 0:
         print(f"Mean Reciprocal Rank (MRR@10): {mrr_sum/count:.4f}")
         print(f"Normalized DCG (nDCG@10): {ndcg_sum/count:.4f}")
+        print(f"Recall@10: {recall_sum/count:.4f}")
     print("=========================================")
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ import pickle
 
 def build_index():
     print("Loading SciFact dataset...")
-    corpus = load_dataset("mteb/scifact", "corpus", split="corpus")
+    corpus = load_dataset("BeIR/scifact", "corpus")["corpus"]
     
     print(f"Indexing SciFact corpus ({len(corpus)} documents)...")
     indexer = IncrementalIndexer("scifact_lexical.pkl")
@@ -40,7 +40,7 @@ def build_index():
         vecs = embed_model.encode(b_texts)
         v_index.add_vectors(b_ids, vecs)
     
-    v_index.save()
+    v_index.save_atomic()
     t1 = time.time()
     print(f"Dense index built & saved in {t1-t0:.2f}s")
 

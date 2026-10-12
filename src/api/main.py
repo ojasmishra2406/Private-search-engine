@@ -710,7 +710,12 @@ def reranked_search(
                 # Prune to Top 15 before cross-encoder latency optimization
                 candidates = candidates[:15]
                 # Keep all candidates in order to apply pagination safely
-                reranked_cands = reranker.rerank(q, candidates, top_k=0)
+                # Feature Flag: Disable Cross-Encoder (domain mismatch)
+                USE_RERANKER = False
+                if USE_RERANKER:
+                    reranked_cands = reranker.rerank(q, candidates, top_k=0)
+                else:
+                    reranked_cands = sorted(candidates, key=lambda x: x.original_score, reverse=True)
             except Exception as e:
                 logger.logger.warning(f"Reranker failed, falling back to hybrid: {e}")
                 reranked_cands = candidates

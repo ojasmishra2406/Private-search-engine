@@ -14,9 +14,9 @@ def run_mrr():
         # warmup
         client.get("/reranked-search?q=scale+document&role=Admin")
         
-        for _ in range(50):
+        for i in range(50):
             t0 = time.time()
-            client.get("/reranked-search?q=scale+document&role=Admin")
+            client.get(f"/reranked-search?q=scale+document+{i}&role=Admin")
             latencies.append((time.time() - t0)*1000)
             
         print(f"\n--- Latency Benchmark ({len(latencies)} runs) ---")

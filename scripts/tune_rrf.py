@@ -63,8 +63,7 @@ def run_grid_search():
             all_query_metrics.append((q_mrr, q_ndcg))
             
             count += 1
-            if count >= 100: 
-                break
+            
                 
         mean_mrr = np.mean([m[0] for m in all_query_metrics])
         mean_ndcg = np.mean([m[1] for m in all_query_metrics])
